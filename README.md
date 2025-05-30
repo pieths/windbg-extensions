@@ -53,6 +53,11 @@ allowing Copilot to suggest appropriate code completions, generate new
 extensions following established patterns, and maintain consistency with the
 existing codebase architecture.
 
+**Note**: Due to a current limitation, the `*.instructions.md` files cannot
+reference files across different drive letters. Run the
+`setup_prompt_instructions.ps1` script to copy all required context files to
+the project directory before using these instructions with Copilot.
+
 ## Requirements
 
 - **Visual Studio 2019/2022** with C++ development tools (command line only version is okay)
