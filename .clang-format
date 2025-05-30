@@ -1,0 +1,7 @@
+BasedOnStyle: Chromium
+Standard: Cpp11
+InsertBraces: true
+InsertNewlineAtEOF: true
+# Don't break string literals since this would make working with
+# the long help strings in the code more difficult.
+BreakStringLiterals: false

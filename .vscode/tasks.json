@@ -1,0 +1,113 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build WinDbg Extensions",
+            "type": "shell",
+            "command": "powershell.exe",
+            "args": [
+                "-ExecutionPolicy", "Bypass",
+                "-File", ".\\build.ps1"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "problemMatcher": [
+                {
+                    "owner": "msvc",
+                    "source": "msvc",
+                    "fileLocation": ["relative", "${workspaceFolder}"],
+                    "pattern": {
+                        "regexp": "^(.+)\\((\\d+)\\)\\s*:\\s+(error|warning)\\s+(C\\d+)\\s*:\\s+(.+)$",
+                        "file": 1,
+                        "line": 2,
+                        "severity": 3,
+                        "code": 4,
+                        "message": 5
+                    }
+                },
+                {
+                    "owner": "msvc",
+                    "source": "msvc",
+                    "fileLocation": ["relative", "${workspaceFolder}"],
+                    "pattern": {
+                        "regexp": "^(.+)\\((\\d+),(\\d+)\\)\\s*:\\s+(error|warning)\\s+(C\\d+)\\s*:\\s+(.+)$",
+                        "file": 1,
+                        "line": 2,
+                        "column": 3,
+                        "severity": 4,
+                        "code": 5,
+                        "message": 6
+                    }
+                },
+                {
+                    "owner": "linker",
+                    "source": "link",
+                    "fileLocation": ["relative", "${workspaceFolder}"],
+                    "pattern": {
+                        "regexp": "^(.+)\\s*:\\s+(error|warning)\\s+(LNK\\d+)\\s*:\\s+(.+)$",
+                        "file": 1,
+                        "severity": 2,
+                        "code": 3,
+                        "message": 4
+                    }
+                },
+                {
+                    "owner": "build",
+                    "source": "build",
+                    "pattern": {
+                        "regexp": "^Error building (.+)\\.$",
+                        "message": 1,
+                    }
+                }
+            ]
+        },
+        {
+            "label": "Clean Build Output",
+            "type": "shell",
+            "command": "powershell.exe",
+            "args": [
+                "-ExecutionPolicy", "Bypass",
+                "-File", ".\\build.ps1",
+                "clean"
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "silent",
+                "focus": false,
+                "panel": "shared"
+            },
+            "options": {
+                "cwd": "${workspaceFolder}"
+            }
+        },
+        {
+            "label": "Rebuild WinDbg Extensions",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "Clean Build Output",
+                "Build WinDbg Extensions"
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            }
+        }
+    ]
+}

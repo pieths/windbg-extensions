@@ -1,0 +1,19 @@
+{
+    // Turns off the default C/C++ IntelliSense engine in favor of clangd
+    "C_Cpp.intelliSenseEngine": "disabled",
+    // Update this path to point to your local clangd executable
+    "clangd.path": "d:/cs/src/third_party/llvm-build/Release+Asserts/bin/clangd.exe",
+    "clangd.semanticHighlighting": true,
+    "editor.semanticHighlighting.enabled": true,
+    "clangd.arguments": [
+        "--all-scopes-completion",
+        "--clang-tidy",
+        "--completion-style=bundled",
+        "--header-insertion=never",
+        "--pch-storage=memory"
+    ],
+
+    // See here for more details:
+    // https://code.visualstudio.com/docs/copilot/copilot-customization#_instruction-files
+    "chat.promptFiles": true,
+}

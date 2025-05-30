@@ -1,0 +1,5 @@
+.github/instructions/dbgeng.h
+build_output/
+debug_env_startup_commands.txt
+breakpoints_history.json
+command_lists.json
