@@ -26,16 +26,6 @@ $extensions = @(
     }
 )
 
-# Standalone executables
-$standaloneExecutables = @(
-    @{
-        Name = "mcp_stdio_bridge"
-        SourceFiles = @("src\mcp_server_stdio_bridge.cpp")
-        Libraries = @("ws2_32.lib")
-        CompilerFlags = @("/std:c++20", "/EHsc")
-    }
-)
-
 # Javascript extensions
 $scripts = @(
     "callback_location",
@@ -48,6 +38,26 @@ $postLoadCommands = @(
     # Show nearby command lists every time the target is suspended for any reason.
     "!AddBreakCommand !ShowNearbyCommandLists",
     "!ListBreakpointsHistory"
+)
+
+# Standalone executables
+$standaloneExecutables = @(
+    @{
+        Name = "mcp_stdio_bridge"
+        SourceFiles = @("src\mcp_server_stdio_bridge.cpp")
+        Libraries = @("ws2_32.lib")
+        CompilerFlags = @("/std:c++20", "/EHsc")
+    }
+)
+
+# Test executables
+$tests = @(
+    # @{
+    #     Name = "breakpoints_history"
+    #     SourceFiles = @("tests\test_breakpoints_history.cpp", "src\utils.cpp", "src\breakpoints_history.cpp", "src\breakpoint_list.cpp")
+    #     Libraries = @("dbgeng.lib")
+    #     CompilerFlags = @("/std:c++20", "/EHsc")
+    # }
 )
 
 ################################################################################
@@ -73,6 +83,52 @@ Setup-VisualStudioEnvironment -ErrorAction Stop
 # Create build output directory
 if (-not (Test-Path -Path ".\build_output" -PathType Container)) {
     New-Item -Path ".\build_output" -ItemType Directory -Force | Out-Null
+}
+
+# If "test" is passed as an argument, build and run tests
+if ($args.Count -gt 0 -and $args[0] -eq "test") {
+    # Get the specific test name if provided
+    $specificTest = if ($args.Count -gt 1) { $args[1] } else { $null }
+
+    # Filter tests if specific test name is provided
+    $testsToRun = $tests | Where-Object { !$specificTest -or $_.Name -eq $specificTest }
+
+    if ($specificTest -and $testsToRun.Count -eq 0) {
+        Write-Host "Error: Test '$specificTest' not found." -ForegroundColor Red
+        exit 1
+    }
+
+    # Build the test executables
+    foreach ($test in $testsToRun) {
+        Write-Host "`nCompiling test: $($test.Name)..."
+
+        $sourceFilesStr = $test.SourceFiles -join " "
+        $librariesStr = $test.Libraries -join " "
+        $compilerFlagsStr = $test.CompilerFlags -join " "
+
+        $command = "cl.exe $compilerFlagsStr $sourceFilesStr $librariesStr /Fo`".\build_output\\`" /Fe`".\build_output\test_$($test.Name).exe`""
+        Invoke-Expression $command
+
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "Error building test: $($test.Name)." -ForegroundColor Red
+            exit 1
+        } else {
+            Write-Host "Successfully built test_$($test.Name).exe" -ForegroundColor Green
+        }
+    }
+
+    # Run the test executables
+    foreach ($test in $testsToRun) {
+        Write-Host "`nRunning test: $($test.Name)..." -ForegroundColor Cyan
+        $testExePath = ".\build_output\test_$($test.Name).exe"
+        & $testExePath
+        if ($LASTEXITCODE -ne 0) {
+            exit 1
+        }
+    }
+
+    Write-Host "`nAll tests completed successfully!" -ForegroundColor Green
+    exit 0
 }
 
 #
@@ -111,6 +167,8 @@ foreach ($extension in $extensions) {
     if ($LASTEXITCODE -ne 0) {
         Write-Host "Error building $($extension.Name)." -ForegroundColor Red
         exit 1
+    } else {
+        Write-Host "Successfully built $($extension.Name).dll" -ForegroundColor Green
     }
 }
 
