@@ -157,8 +157,7 @@ bool BreakpointList::UpdateFirstLineNumber(int new_line_number) {
 std::string BreakpointList::GetSxeString() const {
   // Escape all quotes in the command string
   std::string command_string = GetCombinedCommandString();
-  std::string escaped_command =
-      std::regex_replace(command_string, std::regex("\""), "\\\"");
+  std::string escaped_command = utils::EscapeQuotes(command_string);
 
   std::string sxe_string = "sxe -c \"" + escaped_command + " gc\" ";
   if (module_name_.find(".exe") != std::string::npos) {

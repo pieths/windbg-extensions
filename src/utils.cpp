@@ -136,6 +136,33 @@ std::string RemoveFileExtension(const std::string& filename) {
   return filename.substr(0, last_dot);
 }
 
+std::string EscapeQuotes(const std::string& input) {
+  std::string escaped;
+  size_t backslash_count = 0;
+
+  for (size_t i = 0; i < input.length(); ++i) {
+    if (input[i] == '\\') {
+      // Count consecutive backslashes
+      backslash_count++;
+      escaped += '\\';
+    } else if (input[i] == '"') {
+      // If even number of backslashes (including 0), the quote is not escaped
+      if (backslash_count % 2 == 0) {
+        escaped += "\\\"";
+      } else {
+        // Odd number of backslashes means the quote is already escaped
+        escaped += '"';
+      }
+      backslash_count = 0;  // Reset after encountering a quote
+    } else {
+      // Any other character resets the backslash count
+      backslash_count = 0;
+      escaped += input[i];
+    }
+  }
+  return escaped;
+}
+
 std::string GetCurrentExtensionDir() {
   HMODULE hModule = NULL;
 

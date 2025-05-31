@@ -30,6 +30,9 @@ bool IsWholeNumber(const std::string& input_str);
 // Remove the file extension from a filename.
 std::string RemoveFileExtension(const std::string& filename);
 
+// Escape quotes in a string by replacing " with \"
+std::string EscapeQuotes(const std::string& input);
+
 // Get the directory of the current extension dll.
 std::string GetCurrentExtensionDir();
 
