@@ -108,6 +108,83 @@
                 "focus": false,
                 "panel": "shared"
             }
+        },
+        {
+            "label": "Run All Tests",
+            "type": "shell",
+            "command": "powershell.exe",
+            "args": [
+                "-ExecutionPolicy", "Bypass",
+                "-File", ".\\build.ps1",
+                "tests"
+            ],
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [
+                {
+                    "owner": "ctest",
+                    "source": "ctest",
+                    "pattern": {
+                        "regexp": "^\\s*\\d+:\\s+(.+)\\s+\\.+\\s*(\\*+Failed|\\*+Passed|\\*+Skipped)\\s*(.*)$",
+                        "message": 1,
+                        "severity": 2
+                    }
+                }
+            ]
+        },
+        {
+            "label": "Run Specific Test",
+            "type": "shell",
+            "command": "powershell.exe",
+            "args": [
+                "-ExecutionPolicy", "Bypass",
+                "-File", ".\\build.ps1",
+                "tests",
+                "-TestName", "${input:testName}"
+            ],
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [
+                {
+                    "owner": "ctest",
+                    "source": "ctest",
+                    "pattern": {
+                        "regexp": "^\\s*\\d+:\\s+(.+)\\s+\\.+\\s*(\\*+Failed|\\*+Passed|\\*+Skipped)\\s*(.*)$",
+                        "message": 1,
+                        "severity": 2
+                    }
+                }
+            ]
+        }
+    ],
+    "inputs": [
+        {
+            "id": "testName",
+            "type": "promptString",
+            "description": "Enter the test name pattern (e.g., break_commands_test)"
         }
     ]
 }
