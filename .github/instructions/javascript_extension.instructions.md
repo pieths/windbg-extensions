@@ -12,7 +12,7 @@ applyTo: '**/*.js'
 ## Coding guidelines
 
 - When creating a new javascript extension, keep the overall structure similar to existing javascript extensions
-- When creating a new javascript extension, put the new javascript file in the "Javascript extensions" section of the `build.ps1` file.
+- When creating a new javascript extension, put the new javascript file in the `cmake/GenerateStartupCommands.cmake` file to include it in the startup commands generation.
 - When creating a new command that is exported from the extension script file (aka. non private function), create a corresponding entry in `js_command_wrappers.cpp`.
 
 ## Use the following extra files for context
@@ -21,4 +21,4 @@ applyTo: '**/*.js'
 [continuation_commands.js](../../scripts/continuation_commands.js)
 [type_signatures.js](../../scripts/type_signatures.js)
 [js_command_wrappers.cpp](../../src/js_command_wrappers.cpp)
-[build.ps1](../../build.ps1)
+[GenerateStartupCommands.cmake](../../cmake/GenerateStartupCommands.cmake)

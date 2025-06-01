@@ -31,8 +31,8 @@ std::string g_breakpoint_lists_file;
 void InitializeBreakpoints() {
   if (g_breakpoint_lists_file.empty()) {
     g_breakpoint_lists_file =
-        // Use the parent directory of the current extension
-        utils::GetCurrentExtensionDir() + "\\..\\breakpoints_history.json";
+        // Use the same location as the DLL if no path was set
+        utils::GetCurrentExtensionDir() + "\\breakpoints_history.json";
   }
 
   DOUT("History file: %s\n", g_breakpoint_lists_file.c_str());

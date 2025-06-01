@@ -72,21 +72,40 @@ the project directory before using these instructions with Copilot.
 Run the build script from the project root:
 
 ```powershell
+# Build with default settings (Release mode)
 .\build.ps1
+
+# Build in Debug mode
+.\build.ps1 -Config Debug
+
+# Clean build directory
+.\build.ps1 clean
+.\build.ps1 -Action clean
+
+# Build and run all tests
+.\build.ps1 tests
+.\build.ps1 -Action tests
+
+# Run specific test
+.\build.ps1 -Action tests -TestName break_commands_test
+
+# Build with different configurations
+.\build.ps1 -Config RelWithDebInfo  # Optimized with debug info
+.\build.ps1 -Config MinSizeRel      # Optimized for size
 ```
 
-This will compile all C++ extensions and place them in the `build_output`
-directory. It also auto-generates a WinDbg startup script which can be
-used to launch WinDbg with all the scripts loaded.
+This will compile all C++ extensions and place them in the `build\build_output`
+directory. It also auto-generates a `debug_env_startup_commands.txt` file which
+can be used to launch WinDbg with all the extensions loaded.
 
 **Visual Studio Code Integration**: If you're using VS Code, you can also build
-*using the pre-configured tasks. Press `Ctrl+Shift+P`, type "Tasks: Run Task",
-*and select "Build WinDbg Extensions" or use `Ctrl+Shift+B` for the default
-*build task.
+using the pre-configured tasks. Press `Ctrl+Shift+P`, type "Tasks: Run Task",
+and select "Build WinDbg Extensions" or use `Ctrl+Shift+B` for the default
+build task.
 
-**Note**: The build script is designed for easy extension development - simply
-*add new C++ extensions to the `$extensions` array or JavaScript files to the
-`$scripts` array at the top of `build.ps1` to automatically include them in the
+**Note**: The build system uses CMake to automatically discover and build all
+extensions. Simply add new C++ files to the `src/` directory or JavaScript files
+to the `scripts/` directory and update `CMakeLists.txt` to include them in the
 build process. These details are included in the Copilot instructions.md files
 and Copilot should automatically do this for you when it is asked to create
 a new extension.
@@ -132,17 +151,34 @@ a new extension.
 ```
 ├── src/                         # C++ native extensions source
 │   ├── break_commands.cpp       # Break event command automation
+│   ├── breakpoint_list.cpp      # Breakpoint list data structure
 │   ├── breakpoints_history.cpp  # Persistent breakpoint management
-│   ├── command_lists.cpp        # Command sequence recording/replay
-│   ├── command_logger.cpp       # Command logging utilities
 │   └── utils.cpp                # Shared utility functions
 │   └── ...
 ├── scripts/                     # JavaScript extensions
-│   ├── continuation_commands.js # Enhanced stepping and navigation
 │   ├── callback_location.js     # Chrome callback analysis
+│   ├── continuation_commands.js # Enhanced stepping and navigation
 │   └── type_signatures.js       # Custom object visualizers
+├── tests/                       # Unit tests
+│   ├── CMakeLists.txt           # Test configuration
+│   └── test_break_commands.cpp  # Break commands tests
+│   └── ...
+├── cmake/                       # CMake helper scripts
+│   └── GenerateStartupCommands.cmake # Generates WinDbg startup script
 ├── docs/                        # Documentation
-└── build_output/                # Compiled extensions (generated)
+├── build/                       # CMake build directory (generated)
+│   └── build_output/            # Compiled extensions and tests
+│       ├── break_commands.dll
+│       ├── breakpoints_history.dll
+│       ├── mcp_server.dll
+│       ├── mcp_stdio_bridge.exe
+│       └── test_break_commands.exe
+│       └── ...
+├── CMakeLists.txt              # Main CMake configuration
+├── build.ps1                   # PowerShell build wrapper
+├── .clangd                     # Clangd language server config
+├── .clang-format               # Clang Format C++ formatting rules
+└── debug_env_startup_commands.txt # WinDbg startup script (generated)
 ```
 
 ## Clangd Language Server

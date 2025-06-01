@@ -30,8 +30,8 @@ bool g_enable_break_event_handler_output = true;
 void InitializeCommandLists() {
   if (g_command_lists_file.empty()) {
     g_command_lists_file =
-        // Use the parent directory of the current extension
-        utils::GetCurrentExtensionDir() + "\\..\\command_lists.json";
+        // Use the same location as the DLL if no path was set
+        utils::GetCurrentExtensionDir() + "\\command_lists.json";
   }
 
   DOUT("Command lists file: %s\n", g_command_lists_file.c_str());
