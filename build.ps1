@@ -52,6 +52,12 @@ $standaloneExecutables = @(
 
 # Test executables
 $tests = @(
+    @{
+        Name = "break_commands"
+        SourceFiles = @("tests\test_break_commands.cpp", "src\utils.cpp", "src\break_commands.cpp")
+        Libraries = @("dbgeng.lib")
+        CompilerFlags = @("/std:c++20", "/EHsc", "/Zi", "/Od", "/MDd")
+    }
 )
 
 ################################################################################
