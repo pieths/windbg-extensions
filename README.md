@@ -69,6 +69,14 @@ the project directory before using these instructions with Copilot.
 
 ### Building the Extensions
 
+Start a Visual Studio Developer PowerShell session. You can do this by opening
+PowerShell and running the following command (adjust the path to match your
+Visual Studio installation):
+
+```
+ & 'C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\Launch-VsDevShell.ps1' -Arch amd64 -HostArch amd64
+```
+
 Run the build script from the project root:
 
 ```powershell
