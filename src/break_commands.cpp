@@ -113,6 +113,9 @@ HRESULT CALLBACK AddBreakCommandInternal(IDebugClient* client,
     HRESULT hr = g_debug.client->SetEventCallbacks(g_break_event_handler);
     if (FAILED(hr)) {
       g_break_event_handler->Release();
+      g_break_event_handler = nullptr;
+      g_commands.pop_back();
+      DERROR("Failed to set event callbacks: 0x%08X\n", hr);
       return hr;
     }
   }
