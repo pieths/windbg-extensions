@@ -111,6 +111,11 @@ std::string ExecuteCommand(const DebugInterfaces* interfaces,
                            const std::string& command,
                            bool wait_for_break_status = false);
 
+// Converts a file path to a breakpoint file path which is a path that
+// uses double backslashes for the path separators.
+std::string ConvertToBreakpointFilePath(const std::string& input_path,
+                                        bool check_exists = false);
+
 }  // namespace utils
 
 #endif  // UTILS_H_

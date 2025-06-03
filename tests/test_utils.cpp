@@ -9,6 +9,10 @@ extern std::vector<std::string> utils::ParseCommandLine(const char* cmdLine);
 
 DECLARE_TEST_RUNNER()
 
+//
+// ParseCommandLine tests
+//
+
 TEST(ParseCommandLine_Empty) {
   std::vector<std::string> args = utils::ParseCommandLine("");
   TEST_ASSERT_EQUALS(0, args.size());
@@ -193,6 +197,113 @@ TEST(ParseCommandLine_ForwardSlashPathPassedThroughAsIs) {
       utils::ParseCommandLine(R"(C:/path/to/file.txt)");
   TEST_ASSERT_EQUALS(1, args.size());
   TEST_ASSERT_EQUALS("C:/path/to/file.txt", args[0]);
+}
+
+//
+// ConvertToBreakpointFilePath tests
+//
+
+TEST(ConvertToBreakpointFilePath_EmptyPath) {
+  std::string result = utils::ConvertToBreakpointFilePath("");
+  TEST_ASSERT_EQUALS("", result);
+}
+
+TEST(ConvertToBreakpointFilePath_ForwardSlashPath) {
+  std::string result =
+      utils::ConvertToBreakpointFilePath("C:/Windows/System32/kernel32.dll");
+  // Should convert forward slashes to double backslashes
+  TEST_ASSERT_EQUALS("C:\\\\Windows\\\\System32\\\\kernel32.dll", result);
+}
+
+TEST(ConvertToBreakpointFilePath_SingleBackslashPath) {
+  std::string result =
+      utils::ConvertToBreakpointFilePath("C:\\Windows\\System32\\kernel32.dll");
+  // Should double the backslashes
+  TEST_ASSERT_EQUALS("C:\\\\Windows\\\\System32\\\\kernel32.dll", result);
+}
+
+TEST(ConvertToBreakpointFilePath_DoubleBackslashPath) {
+  std::string result = utils::ConvertToBreakpointFilePath(
+      "C:\\\\Windows\\\\System32\\\\kernel32.dll");
+  // Should normalize to double backslashes (not quadruple)
+  TEST_ASSERT_EQUALS("C:\\\\Windows\\\\System32\\\\kernel32.dll", result);
+}
+
+TEST(ConvertToBreakpointFilePath_MixedSingleAndDoubleBackslashPath) {
+  std::string result = utils::ConvertToBreakpointFilePath(
+      "C:\\Windows\\System32\\\\kernel32.dll");
+  // Should normalize to double backslashes
+  TEST_ASSERT_EQUALS("C:\\\\Windows\\\\System32\\\\kernel32.dll", result);
+}
+
+TEST(ConvertToBreakpointFilePath_MixedSlashPath) {
+  std::string result =
+      utils::ConvertToBreakpointFilePath("C:/Windows\\System32/kernel32.dll");
+  // Should normalize all slashes to double backslashes
+  TEST_ASSERT_EQUALS("C:\\\\Windows\\\\System32\\\\kernel32.dll", result);
+}
+
+TEST(ConvertToBreakpointFilePath_RelativePath) {
+  // Relative paths are not supported and should return an empty string
+  std::string result = utils::ConvertToBreakpointFilePath("..\\test.cpp");
+  TEST_ASSERT_EQUALS("", result);
+}
+
+TEST(ConvertToBreakpointFilePath_NonExistentFile) {
+  // When check_exists is true, should return
+  // empty string for non-existent files
+  std::string result = utils::ConvertToBreakpointFilePath(
+      "C:\\this\\file\\definitely\\does\\not\\exist.cpp", true);
+  TEST_ASSERT_EQUALS("", result);
+}
+
+TEST(ConvertToBreakpointFilePath_NonExistentFileNoCheck) {
+  // Default behavior (check_exists is false) should
+  // return path even if file doesn't exist
+  std::string result = utils::ConvertToBreakpointFilePath(
+      "C:\\this\\file\\definitely\\does\\not\\exist.cpp");
+  TEST_ASSERT_EQUALS(
+      "C:\\\\this\\\\file\\\\definitely\\\\does\\\\not\\\\exist.cpp", result);
+}
+
+TEST(ConvertToBreakpointFilePath_DirectoryPath) {
+  // Should return empty string for directories regardless of check_exists
+  std::string result = utils::ConvertToBreakpointFilePath("C:\\Windows");
+  TEST_ASSERT_EQUALS("", result);
+
+  // Even with check_exists true, directories should return empty
+  result = utils::ConvertToBreakpointFilePath("C:\\Windows", true);
+  TEST_ASSERT_EQUALS("", result);
+}
+
+TEST(ConvertToBreakpointFilePath_UNCPath) {
+  // UNC paths are not supported and should return an empty string
+  std::string result =
+      utils::ConvertToBreakpointFilePath("\\\\server\\share\\file.cpp");
+  TEST_ASSERT_EQUALS("", result);
+}
+
+TEST(ConvertToBreakpointFilePath_PathWithSpaces) {
+  // Paths with spaces should be handled correctly
+  std::string result =
+      utils::ConvertToBreakpointFilePath("C:\\Program Files\\test.cpp");
+  TEST_ASSERT_EQUALS("C:\\\\Program Files\\\\test.cpp", result);
+}
+
+TEST(ConvertToBreakpointFilePath_PathWithSpecialChars) {
+  // Paths with special characters should be preserved (default check_exists =
+  // false)
+  std::string result =
+      utils::ConvertToBreakpointFilePath("C:\\test@#$%\\file.cpp");
+  TEST_ASSERT_EQUALS("C:\\\\test@#$%\\\\file.cpp", result);
+}
+
+TEST(ConvertToBreakpointFilePath_ExistingFileWithCheck) {
+  // Test with an existing file when check_exists is true
+  std::string result = utils::ConvertToBreakpointFilePath(
+      "C:\\Windows\\System32\\kernel32.dll", true);
+  // Should convert and return the path since the file exists
+  TEST_ASSERT_EQUALS("C:\\\\Windows\\\\System32\\\\kernel32.dll", result);
 }
 
 int main() {

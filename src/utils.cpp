@@ -4,6 +4,7 @@
 #include "utils.h"
 
 #include <algorithm>
+#include <filesystem>
 
 namespace utils {
 
@@ -526,6 +527,51 @@ std::string ExecuteCommand(const DebugInterfaces* interfaces,
   capture->Release();
 
   return SUCCEEDED(hr) ? output : "";
+}
+
+std::string ConvertToBreakpointFilePath(const std::string& input_path,
+                                        bool check_exists) {
+  if (input_path.empty()) {
+    return "";
+  }
+
+  try {
+    std::filesystem::path p(input_path);
+
+    // Check if it's a UNC path
+    if (p.has_root_name() && p.root_name().string().substr(0, 2) == "\\\\") {
+      return "";
+    }
+
+    if (p.is_relative()) {
+      return "";
+    }
+
+    p = p.lexically_normal();
+
+    if (std::filesystem::is_directory(p)) {
+      return "";
+    }
+
+    if (check_exists && (!std::filesystem::exists(p))) {
+      return "";
+    }
+
+    // Get the native path and double the backslashes
+    std::string native = p.string();
+    std::string doubled_path;
+    for (char c : native) {
+      if (c == '\\') {
+        doubled_path += "\\\\";
+      } else {
+        doubled_path += c;
+      }
+    }
+
+    return doubled_path;
+  } catch (...) {
+    return "";
+  }
 }
 
 }  // namespace utils
