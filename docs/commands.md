@@ -448,6 +448,29 @@ Update the line number of a specific breakpoint in the history.
 - Without '+': The breakpoint list will be updated in place
 - The updated breakpoint will NOT be automatically set in the debugger
 
+### !SetBreakpointListsFile
+
+Set the path for the breakpoints history file and reload breakpoints from the new location.
+
+**Usage:** `!SetBreakpointListsFile <filePath>`
+
+**Parameters:**
+- `<filePath>` - The full path to the breakpoints history JSON file
+  - Must be a valid file path
+  - The directory must exist (the file will be created if it doesn't exist)
+
+**Examples:**
+```
+!SetBreakpointListsFile C:\Debugger\my_breakpoints.json             - Set a custom breakpoints file
+!SetBreakpointListsFile D:\Projects\debug\breakpoints_history.json  - Use project-specific breakpoints
+```
+
+**Notes:**
+- The path is not persisted between debugging sessions
+- If the file doesn't exist, it will be created when breakpoints are saved
+- If the file exists but is invalid, the breakpoints list will be cleared
+- The default location is in the same directory as the extension DLL
+
 ## Break Event Commands
 
 These commands allow you to automatically execute WinDbg commands whenever the debugger

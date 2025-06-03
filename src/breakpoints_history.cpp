@@ -35,8 +35,6 @@ void InitializeBreakpoints() {
         utils::GetCurrentExtensionDir() + "\\breakpoints_history.json";
   }
 
-  DOUT("History file: %s\n", g_breakpoint_lists_file.c_str());
-
   std::ifstream file(g_breakpoint_lists_file);
   if (file.is_open()) {
     try {
@@ -1184,6 +1182,78 @@ Notes:
   return S_OK;
 }
 
+HRESULT CALLBACK SetBreakpointListsFileInternal(IDebugClient* client,
+                                                const char* args) {
+  if (args && strcmp(args, "?") == 0) {
+    const char* help_text = R"(
+SetBreakpointListsFile Usage:
+
+This function sets the path for the breakpoints history file and reloads the breakpoints from the new location.
+
+Parameter:
+- filePath: The full path to the breakpoints history JSON file
+  * Must be a valid file path
+  * The directory must exist (the file will be created if it doesn't exist)
+  * "?": Shows this help information
+
+Examples:
+- !SetBreakpointListsFile C:\Debugger\my_breakpoints.json - Set a custom breakpoints file
+- !SetBreakpointListsFile D:\Projects\debug\breakpoints_history.json - Use project-specific breakpoints
+
+Notes:
+- The path is not persisted between debugging sessions
+- If the file doesn't exist, it will be created when breakpoints are saved
+- If the file exists but is invalid, the breakpoints list will be cleared
+- The default location is in the same directory as the extension DLL
+)";
+    DOUT("%s\n", help_text);
+    return S_OK;
+  }
+
+  if (!args || strlen(args) == 0) {
+    DERROR("Error: No file path provided.\n");
+    return E_INVALIDARG;
+  }
+
+  // Parse the file path argument
+  std::vector<std::string> parsed_args = utils::ParseCommandLine(args);
+  if (parsed_args.empty()) {
+    DERROR("Error: Invalid file path.\n");
+    return E_INVALIDARG;
+  }
+
+  if (parsed_args.size() > 1) {
+    DERROR("Error: Too many arguments. Expected a single file path.\n");
+    return E_INVALIDARG;
+  }
+
+  std::string new_file_path = parsed_args[0];
+
+  // Basic validation - check if the directory exists
+  std::string directory = new_file_path;
+  size_t last_separator = directory.find_last_of("\\/");
+  if (last_separator != std::string::npos) {
+    directory = directory.substr(0, last_separator);
+
+    DWORD attrib = GetFileAttributesA(directory.c_str());
+    if (attrib == INVALID_FILE_ATTRIBUTES || !(attrib & FILE_ATTRIBUTE_DIRECTORY)) {
+      DERROR("Error: Directory does not exist: %s\n", directory.c_str());
+      return E_INVALIDARG;
+    }
+  }
+
+  // Set the new file path
+  g_breakpoint_lists_file = new_file_path;
+
+  DOUT("Setting breakpoints history file to: %s\n", g_breakpoint_lists_file.c_str());
+
+  // Reinitialize breakpoints with the new file
+  InitializeBreakpoints();
+
+  DOUT("Loaded %u breakpoint list(s) from the new file.\n", g_breakpoint_lists.size());
+  return S_OK;
+}
+
 // Initialize the extension
 HRESULT CALLBACK DebugExtensionInitializeInternal(PULONG version,
                                                   PULONG flags) {
@@ -1194,9 +1264,6 @@ HRESULT CALLBACK DebugExtensionInitializeInternal(PULONG version,
   if (FAILED(hr)) {
     return hr;
   }
-
-  // Initialize breakpoints
-  InitializeBreakpoints();
   return S_OK;
 }
 
@@ -1243,5 +1310,10 @@ SetBreakpointsHistoryTags(IDebugClient* client, const char* args) {
 __declspec(dllexport) HRESULT CALLBACK
 UpdateBreakpointLineNumber(IDebugClient* client, const char* args) {
   return UpdateBreakpointLineNumberInternal(client, args);
+}
+
+__declspec(dllexport) HRESULT CALLBACK
+SetBreakpointListsFile(IDebugClient* client, const char* args) {
+  return SetBreakpointListsFileInternal(client, args);
 }
 }

@@ -15,8 +15,12 @@ set(SCRIPTS
     type_signatures
 )
 
+# Escape the source directory path for use in commands
+string(REPLACE "/" "\\\\" SOURCE_DIR_ESCAPED "${SOURCE_DIR}")
+
 set(POST_LOAD_COMMANDS
     "!AddBreakCommand !ShowNearbyCommandLists"
+    "!SetBreakpointListsFile \"${SOURCE_DIR_ESCAPED}\\\\breakpoints_history.json\""
     "!ListBreakpointsHistory"
 )
 
