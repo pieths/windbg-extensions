@@ -95,6 +95,9 @@ bool ParseNumberOrDottedPair(const std::string& input,
 // Double quotes could not be used because if a double quote
 // is present in the command line as the first non-whitespace
 // character, WinDbg will not pass it to the extension.
+// Note: Backslashes are only used for escaping when they
+// are immediately followed by a single quote. A backslash
+// not before a single quote will be treated as a regular character.
 std::vector<std::string> ParseCommandLine(const char* cmdLine);
 
 // Execute a command and capture its output.

@@ -298,19 +298,55 @@ std::vector<std::string> ParseCommandLine(const char* cmd_line) {
   }
 
   bool in_single_quotes = false;
-  bool is_escaped = false;
   std::string current_arg;
 
   for (const char* p = cmd_line; *p; p++) {
-    if (is_escaped) {
-      // Add escaped character
-      current_arg += *p;
-      is_escaped = false;
-      continue;
-    }
-
     if (*p == '\\') {
-      is_escaped = true;
+      // Count consecutive backslashes
+      int backslash_count = 0;
+      while (p[backslash_count] == '\\') {
+        backslash_count++;
+      }
+
+      // Check what follows the backslashes
+      if (p[backslash_count] == '\'') {
+        // Any backslashes beyond 3 are
+        // treated as regular backslashes
+        while (backslash_count >= 4) {
+          current_arg += '\\';
+          backslash_count--;
+          p++;
+        }
+
+        if (backslash_count == 1) {
+          // p = \'
+          // One backslash followed by a quote escapes
+          // the quote so insert a single quote.
+          current_arg += '\'';
+          p++;  // Move the pointer to the quote character
+        } else if (backslash_count == 2) {
+          // p = \\'
+          // The first backslash escapes the second backslash and
+          // the quote should be seen as an arg delimiter like normal.
+          current_arg += "\\";
+          // Only move the pointer forward by one backslash so that
+          // the quote is processed normally on the next iteration.
+          p++;
+        } else if (backslash_count == 3) {
+          // p = \\\'
+          // The first backlash escapes the second backslash.
+          // The third backslash escapes the single quote.
+          current_arg += "\\'";
+          p += 3;  // Skip the backslashes and the quote
+        }
+      } else {
+        // Backslashes not followed by quote are
+        // treated as regular backslashes
+        for (int i = 0; i < backslash_count; i++) {
+          current_arg += "\\";
+        }
+        p += backslash_count - 1;
+      }
       continue;
     }
 
