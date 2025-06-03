@@ -1236,7 +1236,8 @@ Notes:
     directory = directory.substr(0, last_separator);
 
     DWORD attrib = GetFileAttributesA(directory.c_str());
-    if (attrib == INVALID_FILE_ATTRIBUTES || !(attrib & FILE_ATTRIBUTE_DIRECTORY)) {
+    if (attrib == INVALID_FILE_ATTRIBUTES ||
+        !(attrib & FILE_ATTRIBUTE_DIRECTORY)) {
       DERROR("Error: Directory does not exist: %s\n", directory.c_str());
       return E_INVALIDARG;
     }
@@ -1245,12 +1246,14 @@ Notes:
   // Set the new file path
   g_breakpoint_lists_file = new_file_path;
 
-  DOUT("Setting breakpoints history file to: %s\n", g_breakpoint_lists_file.c_str());
+  DOUT("Setting breakpoints history file to: %s\n",
+       g_breakpoint_lists_file.c_str());
 
   // Reinitialize breakpoints with the new file
   InitializeBreakpoints();
 
-  DOUT("Loaded %u breakpoint list(s) from the new file.\n", g_breakpoint_lists.size());
+  DOUT("Loaded %u breakpoint list(s) from the new file.\n",
+       g_breakpoint_lists.size());
   return S_OK;
 }
 
