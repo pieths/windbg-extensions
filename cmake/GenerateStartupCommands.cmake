@@ -21,6 +21,7 @@ string(REPLACE "/" "\\\\" SOURCE_DIR_ESCAPED "${SOURCE_DIR}")
 set(POST_LOAD_COMMANDS
     "!AddBreakCommand !ShowNearbyCommandLists"
     "!SetBreakpointListsFile \"${SOURCE_DIR_ESCAPED}\\\\breakpoints_history.json\""
+    "!SetCommandListsFile \"${SOURCE_DIR_ESCAPED}\\\\command_lists.json\""
     "!ListBreakpointsHistory"
 )
 

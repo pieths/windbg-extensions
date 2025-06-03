@@ -34,8 +34,6 @@ void InitializeCommandLists() {
         utils::GetCurrentExtensionDir() + "\\command_lists.json";
   }
 
-  DOUT("Command lists file: %s\n", g_command_lists_file.c_str());
-
   std::ifstream file(g_command_lists_file);
   if (file.is_open()) {
     try {
@@ -863,8 +861,6 @@ HRESULT CALLBACK DebugExtensionInitializeInternal(PULONG version,
   if (FAILED(hr)) {
     return hr;
   }
-
-  InitializeCommandLists();
   return S_OK;
 }
 
@@ -1073,6 +1069,73 @@ HRESULT CALLBACK SetCommandListAutoRunInternal(IDebugClient* client,
   return S_OK;
 }
 
+HRESULT CALLBACK SetCommandListsFileInternal(IDebugClient* client,
+                                             const char* args) {
+  if (args && args[0] == '?' && args[1] == '\0') {
+    DOUT(
+        "SetCommandListsFile - Set the path for command lists file\n\n"
+        "Usage: !SetCommandListsFile <filePath>\n\n"
+        "Parameters:\n"
+        "  <filePath> - The full path to the command lists JSON file\n"
+        "               Must be a valid file path\n"
+        "               The directory must exist (file will be created if needed)\n\n"
+        "Examples:\n"
+        "  !SetCommandListsFile C:\\Debugger\\my_commands.json            - Set custom command lists file\n"
+        "  !SetCommandListsFile D:\\Projects\\debug\\command_lists.json   - Use project-specific commands\n\n"
+        "Notes:\n"
+        "- The path is not persisted between debugging sessions\n"
+        "- If the file doesn't exist, it will be created when command lists are saved\n"
+        "- If the file exists but is invalid, the command lists will be cleared\n"
+        "- The default location is in the same directory as the extension DLL\n");
+    return S_OK;
+  }
+
+  if (!args || strlen(args) == 0) {
+    DERROR("No file path provided. Use '?' for help.\n");
+    return E_INVALIDARG;
+  }
+
+  // Parse the file path argument
+  std::vector<std::string> parsed_args = utils::ParseCommandLine(args);
+  if (parsed_args.empty()) {
+    DERROR("Invalid file path.\n");
+    return E_INVALIDARG;
+  }
+
+  if (parsed_args.size() > 1) {
+    DERROR("Too many arguments. Expected a single file path.\n");
+    return E_INVALIDARG;
+  }
+
+  std::string new_file_path = parsed_args[0];
+
+  // Basic validation - check if the directory exists
+  std::string directory = new_file_path;
+  size_t last_separator = directory.find_last_of("\\/");
+  if (last_separator != std::string::npos) {
+    directory = directory.substr(0, last_separator);
+
+    DWORD attrib = GetFileAttributesA(directory.c_str());
+    if (attrib == INVALID_FILE_ATTRIBUTES ||
+        !(attrib & FILE_ATTRIBUTE_DIRECTORY)) {
+      DERROR("Directory does not exist: %s\n", directory.c_str());
+      return E_INVALIDARG;
+    }
+  }
+
+  // Set the new file path
+  g_command_lists_file = new_file_path;
+
+  DOUT("Setting command lists file to: %s\n", g_command_lists_file.c_str());
+
+  // Reinitialize command lists with the new file
+  InitializeCommandLists();
+
+  DOUT("Loaded %u command list(s) from the new file.\n",
+       g_command_lists.size());
+  return S_OK;
+}
+
 // Export functions
 extern "C" {
 __declspec(dllexport) HRESULT CALLBACK DebugExtensionInitialize(PULONG version,
@@ -1132,5 +1195,10 @@ ConvertCommandListToJavascript(IDebugClient* client, const char* args) {
 __declspec(dllexport) HRESULT CALLBACK
 SetCommandListAutoRun(IDebugClient* client, const char* args) {
   return SetCommandListAutoRunInternal(client, args);
+}
+
+__declspec(dllexport) HRESULT CALLBACK SetCommandListsFile(IDebugClient* client,
+                                                           const char* args) {
+  return SetCommandListsFileInternal(client, args);
 }
 }

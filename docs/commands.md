@@ -248,6 +248,29 @@ Set the auto-run flag for a command list.
 When auto-run is enabled, the command list will automatically execute when the
 debugger breaks at the exact source location where it was created.
 
+### !SetCommandListsFile
+
+Set the path for the command lists file and reload command lists from the new location.
+
+**Usage:** `!SetCommandListsFile <filePath>`
+
+**Parameters:**
+- `<filePath>` - The full path to the command lists JSON file
+  - Must be a valid file path
+  - The directory must exist (the file will be created if it doesn't exist)
+
+**Examples:**
+```
+!SetCommandListsFile C:\Debugger\my_commands.json            - Set custom command lists file
+!SetCommandListsFile D:\Projects\debug\command_lists.json    - Use project-specific commands
+```
+
+**Notes:**
+- The path is not persisted between debugging sessions
+- If the file doesn't exist, it will be created when command lists are saved
+- If the file exists but is invalid, the command lists will be cleared
+- The default location is in the same directory as the extension DLL
+
 ### !ShowNearbyCommandLists
 
 Show command lists near the current source location.
