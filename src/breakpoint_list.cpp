@@ -23,9 +23,52 @@ void BreakpointList::SetBreakpointsFromDelimitedString(
   std::stringstream ss(input);
   std::string bp;
 
+  // Regex to match source:line breakpoints
+  // Matches patterns like:
+  // - `c:\path\file.cpp:123`
+  // - c:\path\file.cpp:123
+  // - c:/path/file.cpp:123
+  // - `c:\\path\\file.cpp:123`
+  // - `module!c:\path\file.cpp:123`
+  // - ../test.cpp:123
+  // - \\share\test.cpp:123
+  std::regex source_line_regex(R"(^`?(?:([^!]+)!)?(.+?):(\d+)`?$)");
+
   while (std::getline(ss, bp, ';')) {
     bp = utils::Trim(bp);
     if (!bp.empty()) {
+      std::smatch matches;
+      if (std::regex_match(bp, matches, source_line_regex)) {
+        // This is a source:line breakpoint
+        // Capture group 1: optional module
+        std::string module_prefix = matches[1].str();
+        // Capture group 2: file path
+        std::string file_path = matches[2].str();
+        // Capture group 3: line number
+        std::string line_number = matches[3].str();
+
+        // Convert the file path
+        std::string converted_path =
+            utils::ConvertToBreakpointFilePath(file_path);
+
+        if (converted_path.empty() ||
+            module_prefix.find(' ') != std::string::npos) {
+          // Invalid file path or module name contains invalid
+          // characters. Clear breakpoints and return.
+          breakpoints_.clear();
+          return;
+        }
+
+        // Reconstruct the breakpoint with module prefix (if present) and
+        // converted path
+        if (!module_prefix.empty()) {
+          bp = "`" + module_prefix + "!" + converted_path + ":" + line_number +
+               "`";
+        } else {
+          bp = "`" + converted_path + ":" + line_number + "`";
+        }
+      }
+
       breakpoints_.push_back(bp);
     }
   }

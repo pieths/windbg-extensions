@@ -469,6 +469,7 @@ void SetBreakpointsInternal(const std::string& breakpoints_delimited,
       breakpoints_delimited, new_module_name, new_tag);
 
   if (!breakpoint_list.IsValid()) {
+    DERROR("\nError: One or more breakpoints are invalid.\n");
     return;
   }
 
