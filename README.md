@@ -152,6 +152,26 @@ a new extension.
 
 # Smart step into upcoming function call containing text pattern "CreateDevice"
 !StepIntoFunction CreateDevice
+
+# Use predefined aliases for common commands
+#bpl              # Short for !ListBreakpointsHistory
+#bp 0             # Short for !SetBreakpoints 0
+#bpa 0            # Short for !SetAllProcessesBreakpoints 0
+#sif CreateDevice # Short for !StepIntoFunction CreateDevice
+```
+
+**Command Aliases**: The auto-generated startup script includes aliases
+for frequently used commands:
+- `#bpl` → `!ListBreakpointsHistory`
+- `#bp` → `!SetBreakpoints`
+- `#bpa` → `!SetAllProcessesBreakpoints`
+- `#sif` → `!StepIntoFunction`
+
+To customize these aliases or add your own, edit the `POST_LOAD_COMMANDS`
+section in `cmake/GenerateStartupCommands.cmake` and rebuild. You can also
+define custom aliases directly in WinDbg using the `as` command:
+```windbg
+as myalias !MyFrequentlyUsedCommand
 ```
 
 ## Project Structure
