@@ -433,6 +433,9 @@ HRESULT InitializeDebugInterfaces(DebugInterfaces* interfaces) {
   interfaces->client = nullptr;
   interfaces->control = nullptr;
   interfaces->symbols = nullptr;
+  interfaces->data_spaces = nullptr;
+  interfaces->system_objects = nullptr;
+  interfaces->registers = nullptr;
 
   HRESULT hr = DebugCreate(__uuidof(IDebugClient), (void**)&interfaces->client);
   if (FAILED(hr)) {
@@ -457,6 +460,48 @@ HRESULT InitializeDebugInterfaces(DebugInterfaces* interfaces) {
     return hr;
   }
 
+  hr = interfaces->client->QueryInterface(__uuidof(IDebugDataSpaces4),
+                                          (void**)&interfaces->data_spaces);
+  if (FAILED(hr)) {
+    interfaces->symbols->Release();
+    interfaces->control->Release();
+    interfaces->client->Release();
+    interfaces->symbols = nullptr;
+    interfaces->control = nullptr;
+    interfaces->client = nullptr;
+    return hr;
+  }
+
+  hr = interfaces->client->QueryInterface(__uuidof(IDebugSystemObjects),
+                                          (void**)&interfaces->system_objects);
+  if (FAILED(hr)) {
+    interfaces->data_spaces->Release();
+    interfaces->symbols->Release();
+    interfaces->control->Release();
+    interfaces->client->Release();
+    interfaces->data_spaces = nullptr;
+    interfaces->symbols = nullptr;
+    interfaces->control = nullptr;
+    interfaces->client = nullptr;
+    return hr;
+  }
+
+  hr = interfaces->client->QueryInterface(__uuidof(IDebugRegisters),
+                                          (void**)&interfaces->registers);
+  if (FAILED(hr)) {
+    interfaces->system_objects->Release();
+    interfaces->data_spaces->Release();
+    interfaces->symbols->Release();
+    interfaces->control->Release();
+    interfaces->client->Release();
+    interfaces->system_objects = nullptr;
+    interfaces->data_spaces = nullptr;
+    interfaces->symbols = nullptr;
+    interfaces->control = nullptr;
+    interfaces->client = nullptr;
+    return hr;
+  }
+
   return S_OK;
 }
 
@@ -466,6 +511,21 @@ HRESULT UninitializeDebugInterfaces(DebugInterfaces* interfaces) {
   }
 
   // Release interfaces in reverse order of acquisition
+  if (interfaces->registers) {
+    interfaces->registers->Release();
+    interfaces->registers = nullptr;
+  }
+
+  if (interfaces->system_objects) {
+    interfaces->system_objects->Release();
+    interfaces->system_objects = nullptr;
+  }
+
+  if (interfaces->data_spaces) {
+    interfaces->data_spaces->Release();
+    interfaces->data_spaces = nullptr;
+  }
+
   if (interfaces->symbols) {
     interfaces->symbols->Release();
     interfaces->symbols = nullptr;

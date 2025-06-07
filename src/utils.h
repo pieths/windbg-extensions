@@ -40,6 +40,9 @@ struct DebugInterfaces {
   IDebugClient* client = nullptr;
   IDebugControl* control = nullptr;
   IDebugSymbols* symbols = nullptr;
+  IDebugDataSpaces4* data_spaces = nullptr;
+  IDebugSystemObjects* system_objects = nullptr;
+  IDebugRegisters* registers = nullptr;
 };
 
 HRESULT InitializeDebugInterfaces(DebugInterfaces* interfaces);
