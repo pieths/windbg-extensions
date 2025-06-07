@@ -7,6 +7,7 @@ set(EXTENSIONS
     command_logger
     js_command_wrappers
     mcp_server
+    step_through_mojo
 )
 
 set(SCRIPTS
@@ -20,10 +21,11 @@ string(REPLACE "/" "\\\\" SOURCE_DIR_ESCAPED "${SOURCE_DIR}")
 
 set(POST_LOAD_COMMANDS
     # Aliases to make typing specific commands easier.
-    "as #bpl !ListBreakpointsHistory"
+    "as #bl  !ListBreakpointsHistory"
     "as #bp  !SetBreakpoints"
     "as #bpa !SetAllProcessesBreakpoints"
     "as #sif !StepIntoFunction"
+    "as #gcl !GetCallbackLocation"
 
     "!AddBreakCommand !ShowNearbyCommandLists"
     "!SetBreakpointListsFile \"${SOURCE_DIR_ESCAPED}\\\\breakpoints_history.json\""
