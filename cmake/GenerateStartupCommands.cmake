@@ -7,7 +7,6 @@ set(EXTENSIONS
     command_logger
     js_command_wrappers
     mcp_server
-    step_through_mojo
 )
 
 set(SCRIPTS
