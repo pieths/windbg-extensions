@@ -648,15 +648,14 @@ DebugContextGuard::DebugContextGuard(const DebugInterfaces* interfaces)
   }
 
   // Get the current process ID
-  HRESULT hr = interfaces_->system_objects->GetCurrentProcessSystemId(
-      &original_process_id_);
+  HRESULT hr =
+      interfaces_->system_objects->GetCurrentProcessId(&original_process_id_);
   if (FAILED(hr)) {
     return;
   }
 
   // Get the current thread ID
-  hr = interfaces_->system_objects->GetCurrentThreadSystemId(
-      &original_thread_id_);
+  hr = interfaces_->system_objects->GetCurrentThreadId(&original_thread_id_);
   if (FAILED(hr)) {
     return;
   }
@@ -673,14 +672,13 @@ bool DebugContextGuard::RestoreIfChanged() {
   ULONG current_process_id = 0;
   ULONG current_thread_id = 0;
 
-  HRESULT hr = interfaces_->system_objects->GetCurrentProcessSystemId(
-      &current_process_id);
+  HRESULT hr =
+      interfaces_->system_objects->GetCurrentProcessId(&current_process_id);
   if (FAILED(hr)) {
     return false;
   }
 
-  hr =
-      interfaces_->system_objects->GetCurrentThreadSystemId(&current_thread_id);
+  hr = interfaces_->system_objects->GetCurrentThreadId(&current_thread_id);
   if (FAILED(hr)) {
     return false;
   }
@@ -706,14 +704,12 @@ bool DebugContextGuard::RestoreIfChanged() {
     }
   }
 
-  hr = interfaces_->system_objects->GetCurrentProcessSystemId(
-      &current_process_id);
+  hr = interfaces_->system_objects->GetCurrentProcessId(&current_process_id);
   if (FAILED(hr)) {
     return false;
   }
 
-  hr =
-      interfaces_->system_objects->GetCurrentThreadSystemId(&current_thread_id);
+  hr = interfaces_->system_objects->GetCurrentThreadId(&current_thread_id);
   if (FAILED(hr)) {
     return false;
   }
