@@ -82,11 +82,15 @@ void WaitForBreakStatus(const DebugInterfaces* interfaces) {
     return;
   }
 
+  if (status == DEBUG_STATUS_BREAK) {
+    return;
+  }
+
   if (status == DEBUG_STATUS_GO || status == DEBUG_STATUS_GO_HANDLED ||
       status == DEBUG_STATUS_GO_NOT_HANDLED ||
       status == DEBUG_STATUS_STEP_INTO || status == DEBUG_STATUS_STEP_OVER ||
       status == DEBUG_STATUS_STEP_BRANCH) {
-    // Wait for a total of 30 seconds for the target to break
+    // Wait for a total of 20 seconds for the target to break
     hr = interfaces->control->WaitForEvent(DEBUG_WAIT_DEFAULT, 20000);
     if (FAILED(hr)) {
       return;
