@@ -246,6 +246,7 @@ bool RunCommandList(const CommandList* cmd_list) {
   g_enable_break_event_handler_output = false;
   bool error = false;
   std::string last_command;
+  utils::DebugContextGuard context_guard(&g_debug);
 
   for (const auto& command : cmd_list->GetCommands()) {
     std::string command_to_execute;
@@ -284,7 +285,7 @@ bool RunCommandList(const CommandList* cmd_list) {
       break;
     }
 
-    // If the command started execution (p, t, g, etc.), wait for it to complete
+    // If the command started execution (p, t, gu, ...), wait for it to complete
     if (status == DEBUG_STATUS_GO || status == DEBUG_STATUS_GO_HANDLED ||
         status == DEBUG_STATUS_GO_NOT_HANDLED ||
         status == DEBUG_STATUS_STEP_INTO || status == DEBUG_STATUS_STEP_OVER ||
@@ -311,6 +312,12 @@ bool RunCommandList(const CommandList* cmd_list) {
       DOUT(
           "Target is not at break. Status: %u. Stopping command list execution.\n",
           status);
+      error = true;
+      break;
+    }
+
+    if (!context_guard.RestoreIfChanged()) {
+      DERROR("Failed to restore debug context after command execution.\n");
       error = true;
       break;
     }
