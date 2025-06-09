@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include "debug_event_callbacks.h"
 #include "utils.h"
 
 utils::DebugInterfaces g_debug;
@@ -16,40 +17,11 @@ std::vector<std::string> g_commands;
 class BreakEventHandler;
 BreakEventHandler* g_break_event_handler = nullptr;
 
-class BreakEventHandler : public DebugBaseEventCallbacks {
+class BreakEventHandler : public DebugEventCallbacks {
  public:
-  BreakEventHandler() : m_refCount(1) {}
+  BreakEventHandler() : DebugEventCallbacks(DEBUG_EVENT_CHANGE_ENGINE_STATE) {}
 
-  HRESULT STDMETHODCALLTYPE QueryInterface(REFIID InterfaceId,
-                                           PVOID* Interface) override {
-    *Interface = NULL;
-    if (IsEqualIID(InterfaceId, __uuidof(IUnknown)) ||
-        IsEqualIID(InterfaceId, __uuidof(IDebugEventCallbacks))) {
-      *Interface = (IDebugEventCallbacks*)this;
-      AddRef();
-      return S_OK;
-    }
-    return E_NOINTERFACE;
-  }
-
-  ULONG STDMETHODCALLTYPE AddRef() override {
-    return InterlockedIncrement(&m_refCount);
-  }
-
-  ULONG STDMETHODCALLTYPE Release() override {
-    ULONG count = InterlockedDecrement(&m_refCount);
-    if (count == 0) {
-      delete this;
-    }
-    return count;
-  }
-
-  STDMETHODIMP BreakEventHandler::GetInterestMask(PULONG mask) {
-    *mask = DEBUG_EVENT_CHANGE_ENGINE_STATE;
-    return S_OK;
-  }
-
-  STDMETHODIMP ChangeEngineState(ULONG flags, ULONG64 argument) {
+  STDMETHOD(ChangeEngineState)(ULONG flags, ULONG64 argument) {
     if (flags & DEBUG_CES_EXECUTION_STATUS) {
       // Check if the target was suspended.
       // DEBUG_STATUS_BREAK indicates that the target is suspended
@@ -64,16 +36,12 @@ class BreakEventHandler : public DebugBaseEventCallbacks {
     }
     return S_OK;
   }
-
- private:
-  LONG m_refCount;
 };
 
 HRESULT CALLBACK DebugExtensionInitializeInternal(PULONG version,
                                                   PULONG flags) {
   *version = DEBUG_EXTENSION_VERSION(1, 0);
   *flags = 0;
-
   return utils::InitializeDebugInterfaces(&g_debug);
 }
 
