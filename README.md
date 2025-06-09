@@ -33,6 +33,7 @@ Chromium but might also be useful for debugging other applications.
 - **Smart Step Into**: Advanced stepping with function filtering and pattern matching
 - **Callback Location Analysis**: Analyze Chrome callback objects to determine actual
   callback locations
+- **Step Through Mojo Calls** Step through Mojo IPC message handlers.
 - **Continuation Commands**: Enhanced navigation with automatic breakpoint setting
 
 ### **MCP Server**
@@ -166,6 +167,7 @@ for frequently used commands:
 - `#bp` → `!SetBreakpoints`
 - `#bpa` → `!SetAllProcessesBreakpoints`
 - `#sif` → `!StepIntoFunction`
+- ...
 
 To customize these aliases or add your own, edit the `POST_LOAD_COMMANDS`
 section in `cmake/GenerateStartupCommands.cmake` and rebuild. You can also

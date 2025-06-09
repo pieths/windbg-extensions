@@ -46,6 +46,7 @@ add_windbg_extension(command_lists src/command_lists.cpp src/command_list.cpp)
 add_windbg_extension(command_logger src/command_logger.cpp)
 add_windbg_extension(js_command_wrappers src/js_command_wrappers.cpp)
 add_windbg_extension(mcp_server src/mcp_server.cpp)
+add_windbg_extension(step_through_mojo src/step_through_mojo.cpp)
 
 # Standalone executables
 add_executable(mcp_stdio_bridge src/mcp_server_stdio_bridge.cpp)

@@ -644,3 +644,83 @@ shows the port number and connection information.
 MCP server is running on port 8080
 Connect using: tcp://localhost:8080
 ```
+
+## Mojo IPC Step Through Commands
+
+These commands allow you to step through Mojo IPC message handlers.
+
+### !EnableStepThroughMojo
+
+Enable stepping through Mojo messages by patching the HandleValidatedMessage function.
+
+**Usage:** `!EnableStepThroughMojo [module_name1] [module_name2] ...`
+
+**Parameters:**
+- `[module_name]` - Optional module names to patch (default: chrome.dll)
+
+**Examples:**
+```
+!EnableStepThroughMojo                    - Patch chrome.dll in all processes
+!EnableStepThroughMojo chrome             - Patch chrome.dll explicitly
+!EnableStepThroughMojo content            - Patch content.dll
+!EnableStepThroughMojo 'chrome content'   - Patch both chrome.dll and content.dll
+```
+
+**Description:**
+This command patches `mojo::InterfaceEndpointClient::HandleValidatedMessage` in the
+specified modules. When a Mojo message with bit 29 set in its flags is detected,
+the debugger will automatically break and step through to the message handler.
+
+**Notes:**
+- The extension will automatically patch modules as they load
+- Hooks are process-specific and persist for the lifetime of the module
+- This does not retroactively apply hooks to already-loaded modules
+  so it should be enabled early on in the debugging session when possible.
+
+### !ListStepThroughMojoHooks
+
+List all active Mojo hooks and watched modules.
+
+**Usage:** `!ListStepThroughMojoHooks`
+
+**Description:**
+Displays information about:
+- Active hooks with their module names, process IDs, and addresses
+- Modules being watched for automatic hooking when loaded
+
+**Example output:**
+```
+Active Mojo hooks:
+  0) Module: chrome.dll, Process: 1234 (0x4D2), Hook: 0x7ffe12340000, Int3: 0x7ffe1234001f, HookName: HookReleaseNoConfigChanges
+
+Modules being watched for loading:
+  - chrome.dll
+```
+
+### !StepThroughMojo
+
+Start stepping through the current Mojo call. This needs be run from inside
+the mojo proxy code before the Message instance is created.
+
+**Usage:** `!StepThroughMojo`
+
+**Description:**
+This command initiates stepping through the current Mojo message handler by
+stepping into the Message constructor and setting bit 29 in the message flags.
+It should be used when execution is paused at a Mojo-related breakpoint in
+a `.mojom.cc` file before the Message instance is created.
+
+**Example:**
+```
+!StepThroughMojo
+```
+
+**Notes:**
+- Must be executed when stopped in a `.mojom.cc` file
+- Requires that Mojo hooks are already enabled via `!EnableStepThroughMojo`
+- The command will automatically set the flag and continue execution until
+  the message is processed at the other end.
+
+**See also:**
+- `!EnableStepThroughMojo` - Enable automatic breaking on Mojo messages
+- `!ListStepThroughMojoHooks` - List active hooks and watched modules

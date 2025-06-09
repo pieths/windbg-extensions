@@ -7,6 +7,7 @@ set(EXTENSIONS
     command_logger
     js_command_wrappers
     mcp_server
+    step_through_mojo
 )
 
 set(SCRIPTS
@@ -25,7 +26,9 @@ set(POST_LOAD_COMMANDS
     "as #bpa !SetAllProcessesBreakpoints"
     "as #sif !StepIntoFunction"
     "as #gcl !GetCallbackLocation"
+    "as #stm !StepThroughMojo"
 
+    "!EnableStepThroughMojo"
     "!AddBreakCommand !ShowNearbyCommandLists"
     "!SetBreakpointListsFile \"${SOURCE_DIR_ESCAPED}\\\\breakpoints_history.json\""
     "!SetCommandListsFile \"${SOURCE_DIR_ESCAPED}\\\\command_lists.json\""
