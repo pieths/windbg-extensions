@@ -638,4 +638,142 @@ std::string ConvertToBreakpointFilePath(const std::string& input_path,
   }
 }
 
+DebugContextGuard::DebugContextGuard(const DebugInterfaces* interfaces)
+    : interfaces_(interfaces),
+      original_process_id_(0),
+      original_thread_id_(0),
+      is_valid_(false) {
+  if (!interfaces_ || !interfaces_->system_objects) {
+    return;
+  }
+
+  // Get the current process ID
+  HRESULT hr = interfaces_->system_objects->GetCurrentProcessSystemId(
+      &original_process_id_);
+  if (FAILED(hr)) {
+    return;
+  }
+
+  // Get the current thread ID
+  hr = interfaces_->system_objects->GetCurrentThreadSystemId(
+      &original_thread_id_);
+  if (FAILED(hr)) {
+    return;
+  }
+
+  is_valid_ = true;
+}
+
+bool DebugContextGuard::RestoreIfChanged() {
+  if (!is_valid_ || !interfaces_ || !interfaces_->system_objects) {
+    return false;
+  }
+
+  // Get the current process and thread IDs
+  ULONG current_process_id = 0;
+  ULONG current_thread_id = 0;
+
+  HRESULT hr = interfaces_->system_objects->GetCurrentProcessSystemId(
+      &current_process_id);
+  if (FAILED(hr)) {
+    return false;
+  }
+
+  hr =
+      interfaces_->system_objects->GetCurrentThreadSystemId(&current_thread_id);
+  if (FAILED(hr)) {
+    return false;
+  }
+
+  // Check if the context has changed
+  if (current_process_id != original_process_id_ ||
+      current_thread_id != original_thread_id_) {
+    interfaces_->control->Output(
+        DEBUG_OUTPUT_NORMAL,
+        "Process or thread has changed. Attempting to restore original process %u and thread %u context.\n",
+        original_process_id_, original_thread_id_);
+
+    // Switch back to the original process
+    if (current_process_id != original_process_id_) {
+      interfaces_->system_objects->SetCurrentProcessId(original_process_id_);
+      WaitForBreakStatus(interfaces_);
+    }
+
+    // Switch back to the original thread
+    if (current_thread_id != original_thread_id_) {
+      interfaces_->system_objects->SetCurrentThreadId(original_thread_id_);
+      WaitForBreakStatus(interfaces_);
+    }
+  }
+
+  hr = interfaces_->system_objects->GetCurrentProcessSystemId(
+      &current_process_id);
+  if (FAILED(hr)) {
+    return false;
+  }
+
+  hr =
+      interfaces_->system_objects->GetCurrentThreadSystemId(&current_thread_id);
+  if (FAILED(hr)) {
+    return false;
+  }
+
+  if (current_process_id != original_process_id_ ||
+      current_thread_id != original_thread_id_) {
+    interfaces_->control->Output(
+        DEBUG_OUTPUT_ERROR,
+        "Failed to restore original context. Current process: %u, thread: %u\n",
+        current_process_id, current_thread_id);
+    return false;
+  }
+
+  return true;
+}
+
+std::vector<std::string> GetTopOfCallStack(const DebugInterfaces* interfaces,
+                                           size_t max_depth,
+                                           bool symbol_only) {
+  std::vector<std::string> symbols;
+
+  if (!interfaces || !interfaces->control || !interfaces->symbols ||
+      max_depth == 0) {
+    return symbols;
+  }
+
+  // TODO: Update this to use the IDebugControl::GetStackTrace
+  // IDebugControl::GetStackTrace (and the Ex version) were tried here
+  // followed by IDebugSymbols::GetNameByOffset but this didn't return
+  // return the same output as the "kc" command in the majority of cases.
+  // Need to investigate further why this is the case. It might be related
+  // to the inline function handling?
+
+  std::string command = symbol_only ? "kc " : "kp ";
+  command += std::to_string(max_depth);
+  std::string kcOutput = ExecuteCommand(interfaces, command, true);
+
+  // Parse the output
+  std::vector<std::string> lines = SplitString(kcOutput, "\n");
+  for (const auto& line : lines) {
+    if (line.empty()) {
+      continue;
+    }
+
+    // Skip the header line
+    if (line.find("Call Site") != std::string::npos) {
+      continue;
+    }
+
+    // Extract everything after the frame number
+    size_t pos = line.find(' ');
+    if (pos != std::string::npos) {
+      std::string symbol = Trim(line.substr(pos + 1));
+      if (!symbol.empty()) {
+        symbols.push_back(symbol);
+      }
+    }
+  }
+
+  return symbols;
+}
+
 }  // namespace utils

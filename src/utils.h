@@ -119,6 +119,38 @@ std::string ExecuteCommand(const DebugInterfaces* interfaces,
 std::string ConvertToBreakpointFilePath(const std::string& input_path,
                                         bool check_exists = false);
 
+// A class to manage debugger context switching.
+// Saves the current process and thread context on construction
+// and can restore it when RestoreIfChanged() is called if the
+// context has changed.
+class DebugContextGuard {
+ public:
+  explicit DebugContextGuard(const DebugInterfaces* interfaces);
+  ~DebugContextGuard() = default;
+
+  // Restores the original process and thread context if it has
+  // changed. Returns true if the current context is the same as
+  // the original context. Returns false if the current context
+  // does not match the original context and can not be restored.
+  // false is also returned if there was any error while attempting
+  // to retrieve or restore the context.
+  bool RestoreIfChanged();
+
+ private:
+  const DebugInterfaces* interfaces_;
+  ULONG original_process_id_;
+  ULONG original_thread_id_;
+  bool is_valid_;
+};
+
+// Returns the top max_depth symbols of the current call stack.
+// If symbol_only is true, only symbols are returned (kc). If
+// symbol_only is false all the parameters and extra details
+// are returned as well (kp).
+std::vector<std::string> GetTopOfCallStack(const DebugInterfaces* interfaces,
+                                           size_t max_depth = 5,
+                                           bool symbol_only = true);
+
 }  // namespace utils
 
 #endif  // UTILS_H_
