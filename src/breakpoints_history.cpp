@@ -436,7 +436,7 @@ BreakpointList GetBreakpointListFromArgs(const std::string input_str,
     skip_module_name_and_tag_update = true;
 
   } else {
-    // Treat input as a semicolon-delimited list of breakpoints
+    // Treat input as a comma-delimited list of breakpoints
     std::string module_name = new_module_name;
     if (module_name.empty()) {
       module_name = "chrome.dll";
@@ -701,7 +701,7 @@ SetBreakpoints Usage:
 This function sets breakpoints in the current process only.
 
 Parameters:
-- breakpointsDelimited: A string of breakpoints separated by semicolons (;) or one of:
+- breakpointsDelimited: A string of breakpoints separated by commas (,) or one of:
   * null: Uses the first breakpoint in history
   * Number: Index of breakpoint from history to use
   * "s:term": Searches breakpoint history for "term"
@@ -739,10 +739,10 @@ Examples:
 - !SetBreakpoints '1.0 2.1' chrome.dll - Use first breakpoint from list 1 and second from list 2 and set the module name
 - !SetBreakpoints s:ReadFile - Search history for "ReadFile"
 - !SetBreakpoints t:file_operations - Find breakpoints with tag "file_operations"
-- !SetBreakpoints kernel32!ReadFile kernel32.dll file_ops - Set new breakpoint
-- !SetBreakpoints 'kernel32!ReadFile; kernel32!WriteFile' kernel32.dll file_ops - Set new breakpoints
+- !SetBreakpoints kernel32!ReadFile kernel32.dll file_ops - Set new breakpoint with module name and tag
+- !SetBreakpoints 'kernel32!ReadFile, kernel32!WriteFile' kernel32.dll file_ops - Set new breakpoints
 - !SetBreakpoints '1 2.1 4 + chrome!ReadFile' - Combine breakpoints from history with a new breakpoint
-- !SetBreakpoints '0 + ntdll!NtCreateFile; ntdll!NtReadFile' - Add new breakpoints to those from history index 0
+- !SetBreakpoints '0 + ntdll!NtCreateFile, ntdll!NtReadFile' - Add new breakpoints to those from history index 0
 - !SetBreakpoints . - Set breakpoint at the current source location
 - !SetBreakpoints .:150 - Set breakpoint at line 150 in the current source file
 - !SetBreakpoints . . debug_tag - Set tagged breakpoint at the current location if specified.
@@ -799,7 +799,7 @@ This function sets breakpoints that will be applied to all processes, including
 child processes that are launched after the breakpoints are set.
 
 Parameters:
-- breakpointsDelimited: A string of breakpoints separated by semicolons (;) or one of:
+- breakpointsDelimited: A string of breakpoints separated by commas (,) or one of:
   * null: Uses the first breakpoint in history
   * Number: Index of breakpoint from history to use
   * "s:term": Searches breakpoint history for "term"
@@ -835,10 +835,10 @@ Examples:
 - !SetAllProcessesBreakpoints '1.0 2.1' chrome.dll - Use first breakpoint from list 1 and second from list 2 and set the module name
 - !SetAllProcessesBreakpoints s:ReadFile - Search history for "ReadFile"
 - !SetAllProcessesBreakpoints t:file_operations - Find breakpoints with tag "file_operations"
-- !SetAllProcessesBreakpoints kernel32!ReadFile kernel32.dll file_ops - Set new breakpoint
-- !SetAllProcessesBreakpoints 'kernel32!ReadFile; kernel32!WriteFile' kernel32.dll file_ops - Set new breakpoints
+- !SetAllProcessesBreakpoints kernel32!ReadFile kernel32.dll file_ops - Set new breakpoint with module name and tag
+- !SetAllProcessesBreakpoints 'kernel32!ReadFile, kernel32!WriteFile' kernel32.dll file_ops - Set new breakpoints
 - !SetAllProcessesBreakpoints '1 2.1 4 + chrome!ReadFile' - Combine breakpoints from history with a new breakpoint
-- !SetAllProcessesBreakpoints '0 + ntdll!NtCreateFile; ntdll!NtReadFile' - Add new breakpoints to those from history index 0
+- !SetAllProcessesBreakpoints '0 + ntdll!NtCreateFile, ntdll!NtReadFile' - Add new breakpoints to those from history index 0
 )";
     DOUT("%s\n", help_text);
     return S_OK;

@@ -31,7 +31,7 @@ TEST(SetBreakpointsFromDelimitedString_SingleBreakpoint) {
 TEST(SetBreakpointsFromDelimitedString_MultipleBreakpoints) {
   BreakpointList list;
   list.SetBreakpointsFromDelimitedString(
-      "chrome!test::testFunction;chrome!test2::testFunction2");
+      "chrome!test::testFunction,chrome!test2::testFunction2");
   auto breakpoints = list.GetBreakpoints();
   TEST_ASSERT_EQUALS(2, breakpoints.size());
   TEST_ASSERT_EQUALS("chrome!test::testFunction", breakpoints[0]);
@@ -41,7 +41,7 @@ TEST(SetBreakpointsFromDelimitedString_MultipleBreakpoints) {
 TEST(SetBreakpointsFromDelimitedString_BreakpointsWithSpaces) {
   BreakpointList list;
   list.SetBreakpointsFromDelimitedString(
-      "  kernel32!CreateFileW  ;  ntdll!NtCreateFile  ");
+      "  kernel32!CreateFileW  ,  ntdll!NtCreateFile  ");
   auto breakpoints = list.GetBreakpoints();
   TEST_ASSERT_EQUALS(2, breakpoints.size());
   TEST_ASSERT_EQUALS("kernel32!CreateFileW", breakpoints[0]);
@@ -100,10 +100,27 @@ TEST(SetBreakpointsFromDelimitedString_SourceLineBreakpointDoubleBackslashes) {
   TEST_ASSERT_EQUALS("`chrome!C:\\\\test\\\\file.cpp:321`", breakpoints[0]);
 }
 
+TEST(SetBreakpointsFromDelimitedString_MultipleSourceLineBreakpoint) {
+  BreakpointList list;
+  list.SetBreakpointsFromDelimitedString(
+      "C:\\test\\file.cpp:321, C:\\\\test\\\\file.cpp:437");
+  auto breakpoints = list.GetBreakpoints();
+  TEST_ASSERT_EQUALS(2, breakpoints.size());
+  TEST_ASSERT_EQUALS("`C:\\\\test\\\\file.cpp:321`", breakpoints[0]);
+  TEST_ASSERT_EQUALS("`C:\\\\test\\\\file.cpp:437`", breakpoints[1]);
+
+  list.SetBreakpointsFromDelimitedString(
+      "chrome!C:\\test\\file.cpp:321, chrome!C:\\\\test\\\\file.cpp:437");
+  breakpoints = list.GetBreakpoints();
+  TEST_ASSERT_EQUALS(2, breakpoints.size());
+  TEST_ASSERT_EQUALS("`chrome!C:\\\\test\\\\file.cpp:321`", breakpoints[0]);
+  TEST_ASSERT_EQUALS("`chrome!C:\\\\test\\\\file.cpp:437`", breakpoints[1]);
+}
+
 TEST(SetBreakpointsFromDelimitedString_MixedBreakpointTypes) {
   BreakpointList list;
   list.SetBreakpointsFromDelimitedString(
-      "kernel32!CreateFileW;C:\\test\\file.cpp:123;ntdll!NtCreateFile");
+      "kernel32!CreateFileW,C:\\test\\file.cpp:123,ntdll!NtCreateFile");
   auto breakpoints = list.GetBreakpoints();
   TEST_ASSERT_EQUALS(3, breakpoints.size());
   TEST_ASSERT_EQUALS("kernel32!CreateFileW", breakpoints[0]);
@@ -111,7 +128,7 @@ TEST(SetBreakpointsFromDelimitedString_MixedBreakpointTypes) {
   TEST_ASSERT_EQUALS("ntdll!NtCreateFile", breakpoints[2]);
 
   list.SetBreakpointsFromDelimitedString(
-      "kernel32!CreateFileW;chrome!C:\\test\\file.cpp:123;ntdll!NtCreateFile");
+      "kernel32!CreateFileW,chrome!C:\\test\\file.cpp:123,ntdll!NtCreateFile");
   breakpoints = list.GetBreakpoints();
   TEST_ASSERT_EQUALS(3, breakpoints.size());
   TEST_ASSERT_EQUALS("kernel32!CreateFileW", breakpoints[0]);
@@ -123,7 +140,7 @@ TEST(SetBreakpointsFromDelimitedString_InvalidFilePath) {
   BreakpointList list;
   // Relative paths are not supported and should clear all breakpoints
   list.SetBreakpointsFromDelimitedString(
-      "kernel32!CreateFileW;..\\test.cpp:123;ntdll!NtCreateFile");
+      "kernel32!CreateFileW,..\\test.cpp:123,ntdll!NtCreateFile");
   auto breakpoints = list.GetBreakpoints();
   TEST_ASSERT_EQUALS(0, breakpoints.size());
 }
@@ -139,7 +156,7 @@ TEST(SetBreakpointsFromDelimitedString_UNCPath) {
 TEST(SetBreakpointsFromDelimitedString_EmptyBreakpointsBetweenDelimiters) {
   BreakpointList list;
   list.SetBreakpointsFromDelimitedString(
-      "kernel32!CreateFileW;;ntdll!NtCreateFile");
+      "kernel32!CreateFileW,,ntdll!NtCreateFile");
   auto breakpoints = list.GetBreakpoints();
   TEST_ASSERT_EQUALS(2, breakpoints.size());
   TEST_ASSERT_EQUALS("kernel32!CreateFileW", breakpoints[0]);

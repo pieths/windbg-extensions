@@ -330,7 +330,7 @@ Set breakpoints in the current process only.
 **Parameters:**
 
 - `"!"` - Dry-run mode - shows what would be done without executing commands
-- `breakpointsDelimited` - A string of breakpoint locations separated by semicolons (;) or:
+- `breakpointsDelimited` - A string of breakpoint locations separated by commas (,) or:
   - `null` - Uses the first breakpoint in history
   - `Number` - Index of breakpoint from history to use
   - `"s:term"` - Searches breakpoint history for "term"
@@ -362,9 +362,9 @@ Set breakpoints in the current process only.
 !SetBreakpoints s:ReadFile                              - Search history for "ReadFile"
 !SetBreakpoints t:file_operations                       - Find breakpoints with tag "file_operations"
 !SetBreakpoints kernel32!ReadFile kernel32.dll file_ops - Set new breakpoint
-!SetBreakpoints 'kernel32!ReadFile; kernel32!WriteFile' kernel32.dll file_ops - Set new breakpoints
+!SetBreakpoints 'kernel32!ReadFile, kernel32!WriteFile' kernel32.dll file_ops - Set new breakpoints
 !SetBreakpoints '1 2.1 4 + chrome!ReadFile'            - Combine history with new breakpoint
-!SetBreakpoints '0 + ntdll!NtCreateFile; ntdll!NtReadFile' - Add new to history index 0
+!SetBreakpoints '0 + ntdll!NtCreateFile, ntdll!NtReadFile' - Add new to history index 0
 !SetBreakpoints .                                       - Set breakpoint at current location
 !SetBreakpoints .:150                                   - Set breakpoint at line 150
 ```

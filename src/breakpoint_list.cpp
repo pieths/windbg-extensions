@@ -34,7 +34,7 @@ void BreakpointList::SetBreakpointsFromDelimitedString(
   // - \\share\test.cpp:123
   std::regex source_line_regex(R"(^`?(?:([^!]+)!)?(.+?):(\d+)`?$)");
 
-  while (std::getline(ss, bp, ';')) {
+  while (std::getline(ss, bp, ',')) {
     bp = utils::Trim(bp);
     if (!bp.empty()) {
       std::smatch matches;
