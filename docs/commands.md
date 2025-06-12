@@ -660,10 +660,10 @@ Enable stepping through Mojo messages by patching the HandleValidatedMessage fun
 
 **Examples:**
 ```
-!EnableStepThroughMojo                    - Patch chrome.dll in all processes
-!EnableStepThroughMojo chrome             - Patch chrome.dll explicitly
-!EnableStepThroughMojo content            - Patch content.dll
-!EnableStepThroughMojo 'chrome content'   - Patch both chrome.dll and content.dll
+!EnableStepThroughMojo                 - Patch chrome.dll in all processes
+!EnableStepThroughMojo chrome          - Patch chrome.dll explicitly
+!EnableStepThroughMojo content         - Patch content.dll
+!EnableStepThroughMojo chrome content  - Patch both chrome.dll and content.dll
 ```
 
 **Description:**
