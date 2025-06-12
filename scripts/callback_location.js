@@ -69,8 +69,11 @@ function __RunOptionalCommand(optional_command, functorHexString) {
 }
 
 function GetCallbackLocation(callback, optional_command) {
+    let currentModule = host.namespace.Debugger.State.DebuggerVariables.curframe.Attributes.SourceInformation.Module.Name;
+    let moduleName = currentModule.split("\\").pop().replace(/\.[^.]+$/, "");
+
     let ctl = host.namespace.Debugger.Utility.Control;
-    let bindStateBaseSize = ctl.ExecuteCommand("dx sizeof(chrome!base::internal::BindStateBase)");
+    let bindStateBaseSize = ctl.ExecuteCommand(`dx sizeof(${moduleName}!base::internal::BindStateBase)`);
     bindStateBaseSize = parseInt(bindStateBaseSize[0].split(" ").at(-1).trim(), 16);
 
     let bindStateBaseAddress = callback.holder_.bind_state_.Ptr.address;
@@ -111,7 +114,7 @@ function GetCallbackLocation(callback, optional_command) {
     let callbackAddress = trampolinePointer + 8;
 
     // The second member variable is the Location object.
-    let locationSize = ctl.ExecuteCommand("dx sizeof(chrome!base::Location)");
+    let locationSize = ctl.ExecuteCommand(`dx sizeof(${moduleName}!base::Location)`);
     locationSize = parseInt(locationSize[0].split(" ").at(-1).trim(), 16);
     callbackAddress += locationSize;
 
