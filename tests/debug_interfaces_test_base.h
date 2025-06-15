@@ -6,14 +6,23 @@
 
 #include <string>
 #include <vector>
+
 #include "../src/utils.h"
-#include "mock_debug_interfaces.h"
+#include "mocks/mock_debug_client.h"
+#include "mocks/mock_debug_control.h"
+#include "mocks/mock_debug_data_spaces.h"
+#include "mocks/mock_debug_registers.h"
+#include "mocks/mock_debug_symbols.h"
+#include "mocks/mock_debug_system_objects.h"
 
 class DebugInterfacesTestBase {
  public:
   MockDebugClient* mock_client;
   MockDebugControl* mock_control;
   MockDebugSymbols* mock_symbols;
+  MockDebugDataSpaces* mock_data_spaces;
+  MockDebugSystemObjects* mock_system_objects;
+  MockDebugRegisters* mock_registers;
 
   std::vector<std::string> output_normal;
   std::vector<std::string> output_error;
@@ -22,6 +31,9 @@ class DebugInterfacesTestBase {
     mock_client = new MockDebugClient();
     mock_control = new MockDebugControl();
     mock_symbols = new MockDebugSymbols();
+    mock_data_spaces = new MockDebugDataSpaces();
+    mock_system_objects = new MockDebugSystemObjects();
+    mock_registers = new MockDebugRegisters();
 
     SetupDebugInterfaces(interfaces);
     SetupOutputCapture();
@@ -38,6 +50,9 @@ class DebugInterfacesTestBase {
     delete mock_client;
     delete mock_control;
     delete mock_symbols;
+    delete mock_data_spaces;
+    delete mock_system_objects;
+    delete mock_registers;
   }
 
   void ClearOutput() {
@@ -68,6 +83,9 @@ class DebugInterfacesTestBase {
     interfaces.client = mock_client;
     interfaces.control = mock_control;
     interfaces.symbols = mock_symbols;
+    interfaces.data_spaces = mock_data_spaces;
+    interfaces.system_objects = mock_system_objects;
+    interfaces.registers = mock_registers;
   }
 
   virtual void SetupOutputCapture() {
