@@ -41,7 +41,7 @@ endfunction()
 
 # Native extensions
 add_windbg_extension(break_commands src/break_commands.cpp)
-add_windbg_extension(breakpoints_history src/breakpoints_history.cpp src/breakpoint_list.cpp)
+add_windbg_extension(breakpoints_history src/breakpoints_history.cpp src/breakpoint_list.cpp src/breakpoint.cpp)
 add_windbg_extension(command_lists src/command_lists.cpp src/command_list.cpp)
 add_windbg_extension(command_logger src/command_logger.cpp)
 add_windbg_extension(js_command_wrappers src/js_command_wrappers.cpp)

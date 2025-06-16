@@ -342,8 +342,9 @@ Set breakpoints in the current process only.
   - `".:line"` - Set breakpoint at specified line number in the current source file
 - `newModuleName` - The module to set breakpoints in:
   - `null` - Uses default if creating new, or original if from history
-  - `"."` - Uses the original module name from history
-  - Any other string: Updates the module name
+  - `"."` - Uses the original module name from history. This is useful when updating tags.
+  - `"moduleName"` - Sets as default module name for breakpoints without one
+  - `"+moduleName"` - Replaces all module names with the specified module
 - `newTag` - A descriptive tag for these breakpoints:
   - `null` - Uses original tag if from history
   - `"-"` - Uses empty string (clears the tag)
@@ -354,19 +355,22 @@ Set breakpoints in the current process only.
 !SetBreakpoints 3                                       - Use breakpoint at index 3 from history
 !SetBreakpoints 3.1                                     - Use second breakpoint at index 3
 !SetBreakpoints ! 3                                     - Show what would be done for index 3
-!SetBreakpoints 3 tests.exe                             - Use index 3, update module name
+!SetBreakpoints 3 +tests.exe                            - Use index 3, replace all module names
 !SetBreakpoints 3 . new_tag                             - Use index 3, set new tag
 !SetBreakpoints 3 . -                                   - Use index 3, remove tag
 !SetBreakpoints '1 2 3'                                 - Combine breakpoints from indices 1,2,3
 !SetBreakpoints '1.0 2.1'                               - Use first from list 1, second from list 2
-!SetBreakpoints s:ReadFile                              - Search history for "ReadFile"
-!SetBreakpoints t:file_operations                       - Find breakpoints with tag "file_operations"
+!SetBreakpoints '1.0 2.1' +chrome.dll                   - Use selected breakpoints, update module names
+!SetBreakpoints s:ReadFile                              - Use first breakpoint with text matching "ReadFile"
+!SetBreakpoints t:file_operations                       - Use first breakpoint with tag containing "file_operations"
 !SetBreakpoints kernel32!ReadFile kernel32.dll file_ops - Set new breakpoint
+!SetBreakpoints ReadFile kernel32.dll file_ops          - Set new breakpoint using default module name
 !SetBreakpoints 'kernel32!ReadFile, kernel32!WriteFile' kernel32.dll file_ops - Set new breakpoints
 !SetBreakpoints '1 2.1 4 + chrome!ReadFile'            - Combine history with new breakpoint
 !SetBreakpoints '0 + ntdll!NtCreateFile, ntdll!NtReadFile' - Add new to history index 0
 !SetBreakpoints .                                       - Set breakpoint at current location
 !SetBreakpoints .:150                                   - Set breakpoint at line 150
+!SetBreakpoints . . debug_tag                           - Set tagged breakpoint at current location
 ```
 
 **Note:** If an input argument contains a space then it needs to be enclosed in single
@@ -385,13 +389,14 @@ are launched after the breakpoints are set.
 **Examples:**
 ```
 !SetAllProcessesBreakpoints                             - Use first breakpoint from history
-!SetAllProcessesBreakpoints 3                          - Use breakpoint at index 3
-!SetAllProcessesBreakpoints 3.1                        - Use second breakpoint at index 3
-!SetAllProcessesBreakpoints ! 3                        - Show what would be done for index 3
-!SetAllProcessesBreakpoints s:ReadFile                 - Use first from history matching "ReadFile"
-!SetAllProcessesBreakpoints t:file_operations          - Use first from history matching tag "file_operations"
-!SetAllProcessesBreakpoints '1 2 3'                    - Combine breakpoints from indices
+!SetAllProcessesBreakpoints 3                           - Use breakpoint at index 3
+!SetAllProcessesBreakpoints 3.1                         - Use second breakpoint at index 3
+!SetAllProcessesBreakpoints ! 3                         - Show what would be done for index 3
+!SetAllProcessesBreakpoints s:ReadFile                  - Use first from history matching "ReadFile"
+!SetAllProcessesBreakpoints t:file_operations           - Use first from history matching tag "file_operations"
+!SetAllProcessesBreakpoints '1 2 3'                     - Combine breakpoints from indices
 !SetAllProcessesBreakpoints '1 2.1 4 + chrome!ReadFile' - Combine history with new breakpoint
+!SetAllProcessesBreakpoints 3 +tests.exe                - Use index 3, replace all module names
 ```
 
 ### !RemoveBreakpointsFromHistory

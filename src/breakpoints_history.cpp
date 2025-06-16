@@ -11,15 +11,11 @@
 #include <vector>
 
 #include "breakpoint_list.h"
+#include "debug_event_callbacks.h"
 #include "json.hpp"
 #include "utils.h"
 
 using JSON = nlohmann::json;
-
-// TODO: Handle user input source file breakpoints better. Currently this
-// requires the user to include the back ticks and double backslashes.
-// This is not very user friendly. Automatically detect source file
-// breakpoints and format them correctly.
 
 // WinDbg extension globals
 utils::DebugInterfaces g_debug;
@@ -27,6 +23,64 @@ utils::DebugInterfaces g_debug;
 // Global variables to store breakpoint history
 std::vector<BreakpointList> g_breakpoint_lists;
 std::string g_breakpoint_lists_file;
+BreakpointList g_breakpoint_list;
+
+class EventCallbacks : public DebugEventCallbacks {
+ public:
+  EventCallbacks() : DebugEventCallbacks(DEBUG_EVENT_LOAD_MODULE) {}
+
+  STDMETHOD(LoadModule)(ULONG64 ImageFileHandle,
+                        ULONG64 BaseOffset,
+                        ULONG ModuleSize,
+                        PCSTR ModuleName,
+                        PCSTR ImageName,
+                        ULONG CheckSum,
+                        ULONG TimeDateStamp) {
+    // ModuleName: "chrome"
+    // ImageName: "D:\cs\src\out\release_x64\chrome.dll"
+    std::string module_name(ModuleName);
+
+    // TODO: correctly handle BreakpointLists which might
+    // have module names that contain .dll or .exe extensions.
+
+    if (!g_breakpoint_list.IsValid()) {
+      // If no global breakpoints are set,
+      // we don't need to do anything
+      return DEBUG_STATUS_NO_CHANGE;
+    }
+
+    // TODO: update the extension handling so that
+    // we handle both .exe and .dll files?
+
+    bool found_breakpoints = false;
+
+    // Find all breakpoints that match this module
+    const auto& breakpoints = g_breakpoint_list.GetBreakpoints();
+    for (const auto& bp : breakpoints) {
+      if (bp.GetModuleName() == module_name) {
+        if (!found_breakpoints) {
+          DOUT("\nModule loaded: [%s] - Setting breakpoints...\n",
+               module_name.c_str());
+          found_breakpoints = true;
+        }
+
+        std::string bp_command = "bp " + bp.GetFullString();
+        DOUT("    %s\n", bp_command.c_str());
+
+        g_debug.control->Execute(DEBUG_OUTCTL_ALL_CLIENTS, bp_command.c_str(),
+                                 DEBUG_EXECUTE_DEFAULT);
+      }
+    }
+
+    if (found_breakpoints) {
+      DOUT("\n");
+    }
+
+    return DEBUG_STATUS_NO_CHANGE;
+  }
+};
+
+EventCallbacks* g_event_callbacks = nullptr;
 
 void InitializeBreakpoints() {
   if (g_breakpoint_lists_file.empty()) {
@@ -110,8 +164,6 @@ BreakpointList GetBreakpointListFromNumberString(
     const std::string& number_string) {
   std::vector<std::string> indices =
       utils::SplitString(utils::Trim(number_string), " ");
-  std::vector<std::string> combined_breakpoints;
-  BreakpointList* first_list = nullptr;
   BreakpointList breakpoint_list;
 
   for (const auto& index_str : indices) {
@@ -141,17 +193,11 @@ BreakpointList GetBreakpointListFromNumberString(
     // Get the breakpoint list at the specified index
     const BreakpointList& current_list = g_breakpoint_lists[list_index];
 
-    // Remember the first valid list we find (for module name and tag)
-    if (first_list == nullptr) {
-      first_list = const_cast<BreakpointList*>(&current_list);
-    }
-
     if (parts.size() == 1) {
       // Use all breakpoints from this list
-      const auto& list_breakpoints = current_list.GetBreakpoints();
-      combined_breakpoints.insert(combined_breakpoints.end(),
-                                  list_breakpoints.begin(),
-                                  list_breakpoints.end());
+      for (const auto& bp : current_list.GetBreakpoints()) {
+        breakpoint_list.AddBreakpoint(bp);
+      }
     } else {
       // Use specific breakpoint at the given index
       int bp_index;
@@ -163,29 +209,28 @@ BreakpointList GetBreakpointListFromNumberString(
       }
 
       // Get the specific breakpoint
-      std::string bp = current_list.GetBreakpointAtIndex(bp_index);
-      if (bp.empty()) {
+      Breakpoint bp = current_list.GetBreakpointAtIndex(bp_index);
+      if (!bp.IsValid()) {
         DERROR("Invalid breakpoint index %d for list at index %d\n", bp_index,
                list_index);
         continue;
       } else {
-        combined_breakpoints.push_back(bp);
+        breakpoint_list.AddBreakpoint(bp);
       }
     }
   }
 
-  if (combined_breakpoints.empty() || first_list == nullptr) {
+  if (breakpoint_list.GetBreakpointsCount() == 0) {
     DERROR("No valid breakpoints found from the specified indices.\n");
   } else {
-    // Create a new breakpoint list with the combined breakpoints
-    // Use the module name and tag from the first valid list
-    // Remove duplicate breakpoints using a set
-    std::set<std::string> unique_breakpoints(combined_breakpoints.begin(),
-                                             combined_breakpoints.end());
-    breakpoint_list.SetBreakpointsFromArray(std::vector<std::string>(
-        unique_breakpoints.begin(), unique_breakpoints.end()));
-    breakpoint_list.SetModuleName(first_list->GetModuleName());
-    breakpoint_list.SetTag(first_list->GetTag());
+    // Get tag from the first list if available
+    if (!g_breakpoint_lists.empty() && !indices.empty()) {
+      int first_index = std::stoi(utils::SplitString(indices[0], ".")[0]);
+      if (first_index >= 0 &&
+          first_index < static_cast<int>(g_breakpoint_lists.size())) {
+        breakpoint_list.SetTag(g_breakpoint_lists[first_index].GetTag());
+      }
+    }
   }
 
   return breakpoint_list;
@@ -275,7 +320,10 @@ BreakpointList GetBreakpointListFromCombinedFormat(
   // Then combine with new breakpoints
   std::string module_name = new_module_name;
   if (module_name.empty()) {
-    module_name = new_bp_list1.GetModuleName();
+    // Get module name from the first breakpoint if available
+    if (new_bp_list1.GetBreakpointsCount() > 0) {
+      module_name = new_bp_list1.GetBreakpointAtIndex(0).GetModuleName();
+    }
     if (module_name.empty()) {
       module_name = "chrome.dll";
       DERROR("No module name provided. Using the default: \"chrome.dll\"\n");
@@ -385,7 +433,15 @@ BreakpointList GetBreakpointListFromArgs(const std::string input_str,
                                          const std::string new_module_name,
                                          const std::string new_tag) {
   BreakpointList breakpoint_list;
-  bool skip_module_name_and_tag_update = false;
+  bool skip_tag_update = false;
+  bool replace_all_modules = false;
+  std::string module_name = new_module_name;
+
+  // Check if module name starts with "+" indicating replace all mode
+  if (!module_name.empty() && module_name[0] == '+') {
+    replace_all_modules = true;
+    module_name = module_name.substr(1);  // Remove the "+" prefix
+  }
 
   if (input_str.empty()) {
     // If no breakpoints are provided, use the first one in history
@@ -425,33 +481,37 @@ BreakpointList GetBreakpointListFromArgs(const std::string input_str,
   } else if (input_str.find("+") != std::string::npos) {
     // Handle combined format: "<list of numbers> + <new breakpoints>"
     breakpoint_list =
-        GetBreakpointListFromCombinedFormat(input_str, new_module_name);
+        GetBreakpointListFromCombinedFormat(input_str, module_name);
 
   } else if (input_str == "." ||
              std::regex_match(input_str, std::regex("\\.:\\d+"))) {
     // Handle "." for current location or ".:line_number" for absolute line in
     // current file
     breakpoint_list = GetBreakpointListFromCurrentLocationOrLine(
-        input_str, new_module_name, new_tag);
-    skip_module_name_and_tag_update = true;
+        input_str, module_name, new_tag);
+    skip_tag_update = true;
 
   } else {
     // Treat input as a comma-delimited list of breakpoints
-    std::string module_name = new_module_name;
     if (module_name.empty()) {
       module_name = "chrome.dll";
       DERROR("No module name provided. Using the default: \"chrome.dll\"\n");
     }
 
     breakpoint_list = BreakpointList(input_str, module_name, new_tag);
-    skip_module_name_and_tag_update = true;
+    skip_tag_update = true;
   }
 
-  if (!skip_module_name_and_tag_update) {
-    // Update module name and tag if needed
-    if (!new_module_name.empty() && new_module_name != ".") {
-      breakpoint_list.SetModuleName(new_module_name, true);
+  // Apply module name changes if needed
+  if (!module_name.empty() && breakpoint_list.IsValid()) {
+    if (replace_all_modules) {
+      // Replace all module names
+      breakpoint_list.ReplaceAllModuleNames(module_name);
     }
+  }
+
+  if (!skip_tag_update) {
+    // Update tag if needed
     if (!new_tag.empty()) {
       breakpoint_list.SetTag((new_tag == "-") ? "" : new_tag);
     }
@@ -490,23 +550,18 @@ void SetBreakpointsInternal(const std::string& breakpoints_delimited,
   }
 
   if (all_processes) {
-    std::string sxe_string = breakpoint_list.GetSxeString();
+    g_breakpoint_list = breakpoint_list;
+
+    // Turn on child process debugging
+    g_debug.control->Execute(DEBUG_OUTCTL_ALL_CLIENTS, ".childdbg 1",
+                             DEBUG_EXECUTE_DEFAULT);
+    g_debug.control->Execute(DEBUG_OUTCTL_ALL_CLIENTS, "sxn ibp",
+                             DEBUG_EXECUTE_DEFAULT);
+    g_debug.control->Execute(DEBUG_OUTCTL_ALL_CLIENTS, "sxn epr",
+                             DEBUG_EXECUTE_DEFAULT);
 
     DOUT("\nSetting the following breakpoints for all processes:\n\n");
     DOUT("%s\n", breakpoint_list.ToLongString("\t").c_str());
-
-    std::vector<std::string> commands = {".childdbg 1", "sxn ibp", "sxn epr",
-                                         sxe_string};
-
-    DOUT("Executing the following commands:\n\n");
-    for (const auto& cmd : commands) {
-      DOUT("\t%s\n", cmd.c_str());
-
-      if (run_commands) {
-        g_debug.control->Execute(DEBUG_OUTCTL_IGNORE, cmd.c_str(),
-                                 DEBUG_EXECUTE_DEFAULT);
-      }
-    }
     DOUT("\n");
   } else {
     std::string command_string = breakpoint_list.GetCombinedCommandString();
@@ -717,7 +772,8 @@ Parameters:
 - newModuleName: The module to set breakpoints in
   * null: Uses default if creating new breakpoints, or original if from history
   * ".": Uses the original module name from history. Useful if only changing the tag.
-  * Any other string: Updates the module name
+  * "moduleName": Sets as default module name for breakpoints without one
+  * "+moduleName": Replaces all module names with the specified module
 
 - newTag: A descriptive tag for these breakpoints
   * null: Uses original tag if from history
@@ -731,7 +787,8 @@ Examples:
 - !SetBreakpoints 3 - Use breakpoint at index 3 from history
 - !SetBreakpoints 3.1 - Use the second breakpoint at index 3 from history
 - !SetBreakpoints ! 3 - Show what would be done for index 3 without executing commands
-- !SetBreakpoints 3 tests.exe - Use breakpoint at index 3 from history and update the module name
+- !SetBreakpoints 3 tests.exe - Use breakpoint at index 3 from history and set default module name
+- !SetBreakpoints 3 +tests.exe - Use breakpoint at index 3 from history and replace all module names
 - !SetBreakpoints 3 . new_tag - Use breakpoint at index 3 from history and set a new tag
 - !SetBreakpoints 3 . - - Use breakpoint at index 3 from history and remove the tag
 - !SetBreakpoints '1 2 3' - Combine breakpoints from history indices 1, 2, and 3
@@ -747,7 +804,7 @@ Examples:
 - !SetBreakpoints .:150 - Set breakpoint at line 150 in the current source file
 - !SetBreakpoints . . debug_tag - Set tagged breakpoint at the current location if specified.
 
-Note: Unlike !SetAllProcessesBreakpoints, this function only affects the current process.
+Note: Unlike !SetAllProcessesBreakpoints, this function only affects the current process
 )";
     DOUT("%s\n", helpText);
     return S_OK;
@@ -813,7 +870,8 @@ Parameters:
 - newModuleName: The module to set breakpoints in
   * null: Uses default if creating new breakpoints, or original if from history
   * ".": Uses the original module name from history. Useful if only changing the tag.
-  * Any other string: Updates the module name
+  * "moduleName": Sets as default module name for breakpoints without one
+  * "+moduleName": Replaces all module names with the specified module
 
 - newTag: A descriptive tag for these breakpoints
   * null: Uses original tag if from history
@@ -827,7 +885,8 @@ Examples:
 - !SetAllProcessesBreakpoints 3 - Use breakpoint at index 3 from history
 - !SetAllProcessesBreakpoints 3.1 - Use the second breakpoint at index 3 from history
 - !SetAllProcessesBreakpoints ! 3 - Show what would be done for index 3 without executing commands
-- !SetAllProcessesBreakpoints 3 tests.exe - Use breakpoint at index 3 from history and update the module name
+- !SetAllProcessesBreakpoints 3 tests.exe - Use breakpoint at index 3 from history and set default module name
+- !SetAllProcessesBreakpoints 3 +tests.exe - Use breakpoint at index 3 from history and replace all module names
 - !SetAllProcessesBreakpoints 3 . new_tag - Use breakpoint at index 3 from history and set a new tag
 - !SetAllProcessesBreakpoints 3 . - - Use breakpoint at index 3 from history and remove the tag
 - !SetAllProcessesBreakpoints '1 2 3' - Combine breakpoints from history indices 1, 2, and 3
@@ -872,6 +931,18 @@ Examples:
     // The third argument is the tag
     if (parsed_args.size() > 2) {
       new_tag = parsed_args[2];
+    }
+  }
+
+  // Register event callbacks if not already done
+  if (!g_event_callbacks) {
+    g_event_callbacks = new EventCallbacks();
+    HRESULT hr = g_debug.client->SetEventCallbacks(g_event_callbacks);
+    if (FAILED(hr)) {
+      g_event_callbacks->Release();
+      g_event_callbacks = nullptr;
+      DERROR("Failed to set event callbacks: 0x%08X\n", hr);
+      return hr;
     }
   }
 
@@ -1272,6 +1343,13 @@ HRESULT CALLBACK DebugExtensionInitializeInternal(PULONG version,
 }
 
 HRESULT CALLBACK DebugExtensionUninitializeInternal() {
+  // Clean up the event handler
+  if (g_event_callbacks) {
+    g_debug.client->SetEventCallbacks(nullptr);
+    g_event_callbacks->Release();
+    g_event_callbacks = nullptr;
+  }
+
   return utils::UninitializeDebugInterfaces(&g_debug);
 }
 

@@ -3,70 +3,55 @@
 
 #include "breakpoint_list.h"
 
-#include <regex>
 #include <set>
 #include <sstream>
 
 #include "utils.h"
 
 BreakpointList::BreakpointList(const std::string& delimited_breakpoints,
-                               const std::string& module_name,
+                               const std::string& default_module_name,
                                const std::string& tag) {
-  SetBreakpointsFromDelimitedString(delimited_breakpoints);
-  SetModuleName(module_name);
+  SetBreakpointsFromDelimitedString(delimited_breakpoints, default_module_name);
   SetTag(tag);
 }
 
 void BreakpointList::SetBreakpointsFromDelimitedString(
-    const std::string& input) {
-  breakpoints_.clear();
+    const std::string& input,
+    const std::string& default_module_name) {
+  std::vector<std::string> breakpoint_strings;
   std::stringstream ss(input);
-  std::string bp;
+  std::string bp_string;
 
-  // Regex to match source:line breakpoints
-  // Matches patterns like:
-  // - `c:\path\file.cpp:123`
-  // - c:\path\file.cpp:123
-  // - c:/path/file.cpp:123
-  // - `c:\\path\\file.cpp:123`
-  // - `module!c:\path\file.cpp:123`
-  // - ../test.cpp:123
-  // - \\share\test.cpp:123
-  std::regex source_line_regex(R"(^`?(?:([^!]+)!)?(.+?):(\d+)`?$)");
+  while (std::getline(ss, bp_string, ',')) {
+    bp_string = utils::Trim(bp_string);
+    if (!bp_string.empty()) {
+      breakpoint_strings.push_back(bp_string);
+    }
+  }
 
-  while (std::getline(ss, bp, ',')) {
-    bp = utils::Trim(bp);
-    if (!bp.empty()) {
-      std::smatch matches;
-      if (std::regex_match(bp, matches, source_line_regex)) {
-        // This is a source:line breakpoint
-        // Capture group 1: optional module
-        std::string module_prefix = matches[1].str();
-        // Capture group 2: file path
-        std::string file_path = matches[2].str();
-        // Capture group 3: line number
-        std::string line_number = matches[3].str();
+  SetBreakpointsFromArray(breakpoint_strings, default_module_name);
+}
 
-        // Convert the file path
-        std::string converted_path =
-            utils::ConvertToBreakpointFilePath(file_path);
+void BreakpointList::SetBreakpointsFromArray(
+    const std::vector<std::string>& breakpoints,
+    const std::string& default_module_name) {
+  breakpoints_.clear();
+  for (const auto& bp_string : breakpoints) {
+    std::string trimmed = utils::Trim(bp_string);
+    if (!trimmed.empty()) {
+      Breakpoint bp(trimmed);
 
-        if (converted_path.empty() ||
-            module_prefix.find(' ') != std::string::npos) {
-          // Invalid file path or module name contains invalid
-          // characters. Clear breakpoints and return.
-          breakpoints_.clear();
-          return;
-        }
+      // If the breakpoint doesn't have a module name and
+      // we have a default use the default module name
+      if (bp.GetModuleName().empty() && !default_module_name.empty()) {
+        bp.SetModuleName(default_module_name);
+      }
 
-        // Reconstruct the breakpoint with module prefix (if present) and
-        // converted path
-        if (!module_prefix.empty()) {
-          bp = "`" + module_prefix + "!" + converted_path + ":" + line_number +
-               "`";
-        } else {
-          bp = "`" + converted_path + ":" + line_number + "`";
-        }
+      if (!bp.IsValid()) {
+        // Any invalid breakpoint should
+        // invalidate the entire list
+        breakpoints_.clear();
+        return;
       }
 
       breakpoints_.push_back(bp);
@@ -74,61 +59,53 @@ void BreakpointList::SetBreakpointsFromDelimitedString(
   }
 }
 
-void BreakpointList::SetBreakpointsFromArray(
-    const std::vector<std::string>& breakpoints) {
-  breakpoints_.clear();
-  for (const auto& bp : breakpoints) {
-    std::string trimmed = utils::Trim(bp);
-    if (!trimmed.empty()) {
-      breakpoints_.push_back(trimmed);
-    }
-  }
-}
-
-void BreakpointList::SetModuleName(const std::string& module_name,
-                                   bool update_breakpoints) {
-  if (update_breakpoints) {
-    // If a breakpoint has a module name that matches
-    // the old module name, update it to the new module name.
-    std::string old_module_name = utils::RemoveFileExtension(module_name_);
-    std::string new_module_name = utils::RemoveFileExtension(module_name);
-
-    // Update breakpoints that match the old module name
-    for (auto& bp : breakpoints_) {
-      size_t bangPos = bp.find('!');
-      if (bangPos != std::string::npos) {
-        std::string bp_module_name = bp.substr(0, bangPos);
-        if (bp_module_name == old_module_name) {
-          bp = new_module_name + "!" + bp.substr(bangPos + 1);
-        }
+void BreakpointList::AddBreakpoint(const Breakpoint& breakpoint) {
+  if (breakpoint.IsValid()) {
+    // Check if this breakpoint already exists in the list
+    for (const auto& existing_bp : breakpoints_) {
+      if (existing_bp.GetFullString() == breakpoint.GetFullString()) {
+        return;  // Breakpoint already exists, don't add it
       }
     }
-
-    // Remove duplicates
-    std::set<std::string> uniqueBreakpoints(breakpoints_.begin(),
-                                            breakpoints_.end());
-    breakpoints_.assign(uniqueBreakpoints.begin(), uniqueBreakpoints.end());
+    breakpoints_.push_back(breakpoint);
   }
-
-  module_name_ = module_name;
 }
 
-std::string BreakpointList::GetBreakpointAtIndex(size_t index) const {
-  return (index >= breakpoints_.size()) ? "" : breakpoints_[index];
+void BreakpointList::ReplaceAllModuleNames(const std::string& new_module_name) {
+  for (auto& bp : breakpoints_) {
+    bp.SetModuleName(new_module_name);
+  }
+}
+
+Breakpoint BreakpointList::GetBreakpointAtIndex(size_t index) const {
+  if (index >= breakpoints_.size()) {
+    return Breakpoint();  // Return invalid breakpoint
+  }
+  return breakpoints_[index];
 }
 
 bool BreakpointList::IsValid() const {
-  return !breakpoints_.empty() && !module_name_.empty();
+  if (breakpoints_.empty()) {
+    return false;
+  }
+
+  // All breakpoints must be valid
+  for (const auto& bp : breakpoints_) {
+    if (!bp.IsValid()) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 bool BreakpointList::HasTextMatch(const std::string& search_term) const {
-  if (utils::ContainsCI(module_name_, search_term) ||
-      utils::ContainsCI(tag_, search_term)) {
+  if (utils::ContainsCI(tag_, search_term)) {
     return true;
   }
 
   for (const auto& bp : breakpoints_) {
-    if (utils::ContainsCI(bp, search_term)) {
+    if (utils::ContainsCI(bp.GetFullString(), search_term)) {
       return true;
     }
   }
@@ -141,21 +118,29 @@ bool BreakpointList::HasTagMatch(const std::string& search_term) const {
 }
 
 bool BreakpointList::IsEqualTo(const BreakpointList& other) const {
-  if (module_name_ != other.module_name_ || tag_ != other.tag_ ||
-      breakpoints_.size() != other.breakpoints_.size()) {
+  if (tag_ != other.tag_ || breakpoints_.size() != other.breakpoints_.size()) {
     return false;
   }
 
-  std::set<std::string> this_set(breakpoints_.begin(), breakpoints_.end());
-  std::set<std::string> other_set(other.breakpoints_.begin(),
-                                  other.breakpoints_.end());
+  // Create sets of full breakpoint strings for comparison
+  std::set<std::string> this_set;
+  std::set<std::string> other_set;
+
+  for (const auto& bp : breakpoints_) {
+    this_set.insert(bp.GetFullString());
+  }
+
+  for (const auto& bp : other.breakpoints_) {
+    other_set.insert(bp.GetFullString());
+  }
+
   return this_set == other_set;
 }
 
 std::string BreakpointList::GetCombinedCommandString() const {
   std::string command_string;
   for (const auto& bp : breakpoints_) {
-    command_string += "bp " + bp + "; ";
+    command_string += "bp " + bp.GetFullString() + "; ";
   }
   return command_string;
 }
@@ -165,65 +150,55 @@ bool BreakpointList::UpdateLineNumber(size_t index, int new_line_number) {
     return false;
   }
 
-  std::string& bp = breakpoints_[index];
-
-  // Match pattern like ":123`" where 123 is any number
-  std::regex line_pattern(":([0-9]+)(`)");
-  std::smatch matches;
-
-  if (std::regex_search(bp, matches, line_pattern) && matches.size() >= 3) {
-    // Construct new string with updated line number
-    std::string before = bp.substr(0, matches.position(1));
-    std::string after = bp.substr(matches.position(1) + matches.length(1));
-
-    // Replace the line number but keep the backtick
-    bp = before + std::to_string(new_line_number) + after;
-    return true;
+  Breakpoint& bp = breakpoints_[index];
+  if (!bp.IsSourceLineBreakpoint()) {
+    return false;
   }
 
-  // Could not find a line number pattern in this breakpoint
-  return false;
+  return bp.UpdateLineNumber(new_line_number);
 }
 
 bool BreakpointList::UpdateFirstLineNumber(int new_line_number) {
-  // Update the first breakpoints line number where UpdateLineNumber returns
-  // true
+  if (new_line_number <= 0) {
+    return false;  // Invalid line number
+  }
+
   for (size_t i = 0; i < breakpoints_.size(); ++i) {
     if (UpdateLineNumber(i, new_line_number)) {
-      // Successfully updated the first found source:line breakpoint.
       return true;
     }
   }
-  return false;  // No breakpoints were updated
+  return false;
 }
 
-std::string BreakpointList::GetSxeString() const {
+std::string BreakpointList::GetSxeString(const std::string& module_name) const {
   // Escape all quotes in the command string
   std::string command_string = GetCombinedCommandString();
   std::string escaped_command = utils::EscapeQuotes(command_string);
 
   std::string sxe_string = "sxe -c \"" + escaped_command + " gc\" ";
-  if (module_name_.find(".exe") != std::string::npos) {
+  if (module_name.find(".exe") != std::string::npos) {
     sxe_string += "cpr:";
   } else {
     sxe_string += "ld:";
   }
-  sxe_string += module_name_;
+  sxe_string += module_name;
   return sxe_string;
 }
 
 std::string BreakpointList::ToShortString() const {
-  std::string outputString = module_name_;
+  std::string outputString;
+
   if (!tag_.empty()) {
-    outputString += " (" + tag_ + ")";
+    outputString += " (" + tag_ + ") ";
   }
-  outputString += " [";
+  outputString += "[";
 
   for (size_t i = 0; i < breakpoints_.size(); i++) {
     if (i > 0) {
       outputString += "; ";
     }
-    outputString += breakpoints_[i];
+    outputString += breakpoints_[i].GetFullString();
   }
 
   return outputString + "]";
@@ -234,19 +209,33 @@ std::string BreakpointList::ToLongString(const std::string& indent) const {
   if (!tag_.empty()) {
     output_string += indent + "TAG:    " + tag_ + "\n";
   }
-  output_string += indent + "MODULE: " + module_name_ + "\n\n";
 
+  // Group breakpoints by module
+  std::map<std::string, std::vector<const Breakpoint*>> module_breakpoints;
   for (const auto& bp : breakpoints_) {
-    output_string += indent + bp + "\n";
+    module_breakpoints[bp.GetModuleName()].push_back(&bp);
   }
+
+  for (const auto& [module, bps] : module_breakpoints) {
+    output_string += indent + "MODULE: " + module + "\n";
+    for (const auto* bp : bps) {
+      output_string += indent + "  " + bp->GetLocation() + "\n";
+    }
+    output_string += indent + "\n";
+  }
+
   return output_string;
 }
 
 JSON BreakpointList::ToJson() const {
   JSON json;
   json["tag"] = tag_;
-  json["moduleName"] = module_name_;
-  json["breakpoints"] = breakpoints_;
+
+  JSON breakpoints_json = JSON::array();
+  for (const auto& bp : breakpoints_) {
+    breakpoints_json.push_back(bp.ToJson());
+  }
+  json["breakpoints"] = breakpoints_json;
   return json;
 }
 
@@ -257,14 +246,11 @@ BreakpointList BreakpointList::FromJson(const JSON& json) {
     breakpoint_list.tag_ = json["tag"].get<std::string>();
   }
 
-  if (json.contains("moduleName") && json["moduleName"].is_string()) {
-    breakpoint_list.module_name_ = json["moduleName"].get<std::string>();
-  }
-
   if (json.contains("breakpoints") && json["breakpoints"].is_array()) {
-    for (const auto& bp : json["breakpoints"]) {
-      if (bp.is_string()) {
-        breakpoint_list.breakpoints_.push_back(bp.get<std::string>());
+    for (const auto& bp_json : json["breakpoints"]) {
+      Breakpoint bp = Breakpoint::FromJson(bp_json);
+      if (bp.IsValid()) {
+        breakpoint_list.breakpoints_.push_back(bp);
       }
     }
   }
@@ -276,19 +262,27 @@ BreakpointList BreakpointList::CombineBreakpointLists(
     const BreakpointList& list1,
     const BreakpointList& list2) {
   BreakpointList combined;
-  combined.module_name_ = list1.module_name_;
   combined.tag_ = list1.tag_;
 
-  // Combine and deduplicate breakpoints
-  std::set<std::string> uniqueBreakpoints;
+  // Combine and deduplicate breakpoints based on their full string
+  // representation
+  std::set<std::string> unique_breakpoints;
+  std::vector<Breakpoint> combined_breakpoints;
+
   for (const auto& bp : list1.breakpoints_) {
-    uniqueBreakpoints.insert(bp);
-  }
-  for (const auto& bp : list2.breakpoints_) {
-    uniqueBreakpoints.insert(bp);
+    std::string full_string = bp.GetFullString();
+    if (unique_breakpoints.insert(full_string).second) {
+      combined_breakpoints.push_back(bp);
+    }
   }
 
-  combined.breakpoints_.assign(uniqueBreakpoints.begin(),
-                               uniqueBreakpoints.end());
+  for (const auto& bp : list2.breakpoints_) {
+    std::string full_string = bp.GetFullString();
+    if (unique_breakpoints.insert(full_string).second) {
+      combined_breakpoints.push_back(bp);
+    }
+  }
+
+  combined.breakpoints_ = std::move(combined_breakpoints);
   return combined;
 }
