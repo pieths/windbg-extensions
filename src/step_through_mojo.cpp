@@ -836,15 +836,18 @@ HRESULT CALLBACK EnableStepThroughMojoInternal(IDebugClient* client,
         "Usage: !EnableStepThroughMojo [module_name1] [module_name2] ...\n\n"
         "  [module_name] - Optional module names to patch (default: chrome.dll)\n\n"
         "Examples:\n"
-        "  !EnableStepThroughMojo                 - Patch chrome.dll in all processes\n"
-        "  !EnableStepThroughMojo chrome          - Patch chrome.dll explicitly\n"
-        "  !EnableStepThroughMojo content         - Patch content.dll\n"
-        "  !EnableStepThroughMojo chrome content  - Patch both chrome.dll and content.dll\n"
+        "  !EnableStepThroughMojo                              - Patch chrome.dll in all processes\n"
+        "  !EnableStepThroughMojo chrome                       - Patch chrome.dll explicitly\n"
+        "  !EnableStepThroughMojo mojo_public_cpp_bindings.dll - Patch mojo_public_cpp_bindings.dll explicitly\n"
         "Notes:\n"
         "  - The extension will automatically patch modules as they load\n"
         "  - Hooks are process-specific and persist for the lifetime of the module.\n"
         "  - This does not retroactively apply the hooks. The hooks are only\n"
-        "    applied to modules that are loaded after this command is run.\n");
+        "    applied to modules that are loaded after this command is run.\n"
+        "  - The modules specified here should be the ones that contain the\n"
+        "    mojo::InterfaceEndpointClient::HandleValidatedMessage method.\n"
+        "    For release builds this is usually chrome.dll.\n"
+        "    For debug builds this is usually mojo_public_cpp_bindings.dll.\n");
     return S_OK;
   }
 

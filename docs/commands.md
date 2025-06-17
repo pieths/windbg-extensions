@@ -656,7 +656,7 @@ These commands allow you to step through Mojo IPC message handlers.
 
 ### !EnableStepThroughMojo
 
-Enable stepping through Mojo messages by patching the HandleValidatedMessage function.
+Enable stepping through Mojo messages.
 
 **Usage:** `!EnableStepThroughMojo [module_name1] [module_name2] ...`
 
@@ -665,10 +665,9 @@ Enable stepping through Mojo messages by patching the HandleValidatedMessage fun
 
 **Examples:**
 ```
-!EnableStepThroughMojo                 - Patch chrome.dll in all processes
-!EnableStepThroughMojo chrome          - Patch chrome.dll explicitly
-!EnableStepThroughMojo content         - Patch content.dll
-!EnableStepThroughMojo chrome content  - Patch both chrome.dll and content.dll
+!EnableStepThroughMojo                              - Patch chrome.dll in all processes
+!EnableStepThroughMojo chrome                       - Patch chrome.dll explicitly
+!EnableStepThroughMojo mojo_public_cpp_bindings.dll - Patch mojo_public_cpp_bindings.dll explicitly
 ```
 
 **Description:**
@@ -679,8 +678,12 @@ the debugger will automatically break and step through to the message handler.
 **Notes:**
 - The extension will automatically patch modules as they load
 - Hooks are process-specific and persist for the lifetime of the module
-- This does not retroactively apply hooks to already-loaded modules
-  so it should be enabled early on in the debugging session when possible.
+- This does not retroactively apply the hooks. The hooks are only
+  applied to modules that are loaded after this command is run.
+- The modules specified here should be the ones that contain the
+  mojo::InterfaceEndpointClient::HandleValidatedMessage method.
+  For release builds this is usually chrome.dll.
+  For debug builds this is usually mojo_public_cpp_bindings.dll.
 
 ### !ListStepThroughMojoHooks
 
