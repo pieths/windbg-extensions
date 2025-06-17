@@ -36,13 +36,13 @@ utils::DebugInterfaces g_debug;
 
 class MCPServer {
  public:
-  MCPServer() : m_running(false), m_server_socket(INVALID_SOCKET), m_port(0) {}
+  MCPServer() : running_(false), server_socket_(INVALID_SOCKET), port_(0) {}
   ~MCPServer() { Stop(); }
 
   HRESULT Start(int port);
   HRESULT Stop();
-  bool IsRunning() const { return m_running; }
-  int GetPort() const { return m_port; }
+  bool IsRunning() const { return running_; }
+  int GetPort() const { return port_; }
 
  private:
   // Server management
@@ -82,21 +82,21 @@ class MCPServer {
   JSON ExecuteOnMainThread(std::function<JSON()> operation);
 
   // Member variables
-  std::atomic<bool> m_running;
-  SOCKET m_server_socket;
-  int m_port;
-  std::thread m_server_thread;
+  std::atomic<bool> running_;
+  SOCKET server_socket_;
+  int port_;
+  std::thread server_thread_;
 
   // Async operations are used to track long-running tasks.
   // A client can poll for the status of these operations.
-  std::mutex m_operations_mutex;
-  std::map<std::string, AsyncOperation> m_async_operations;
+  std::mutex operations_mutex_;
+  std::map<std::string, AsyncOperation> async_operations_;
   static std::atomic<int> s_operation_counter;
 
   // Add thread tracking for client socket handlers
-  std::mutex m_clients_mutex;
-  std::set<std::thread::id> m_active_clients;
-  std::condition_variable m_clients_cv;
+  std::mutex clients_mutex_;
+  std::set<std::thread::id> active_clients_;
+  std::condition_variable clients_cv_;
 
   // Command queue for thread-safe operations
   struct DebugCommand {
@@ -106,16 +106,16 @@ class MCPServer {
 
   // Command queue which is used to process
   // all commands on a single thread.
-  std::queue<std::unique_ptr<DebugCommand>> m_command_queue;
-  std::mutex m_queue_mutex;
-  std::condition_variable m_queue_cv;
-  std::thread m_command_processor_thread;
+  std::queue<std::unique_ptr<DebugCommand>> command_queue_;
+  std::mutex queue_mutex_;
+  std::condition_variable queue_cv_;
+  std::thread command_processor_thread_;
 };
 
 std::atomic<int> MCPServer::s_operation_counter(0);
 
 HRESULT MCPServer::Start(int port) {
-  if (m_running) {
+  if (running_) {
     return E_FAIL;
   }
 
@@ -126,8 +126,8 @@ HRESULT MCPServer::Start(int port) {
   }
 
   // Create socket
-  m_server_socket = socket(AF_INET, SOCK_STREAM, 0);
-  if (m_server_socket == INVALID_SOCKET) {
+  server_socket_ = socket(AF_INET, SOCK_STREAM, 0);
+  if (server_socket_ == INVALID_SOCKET) {
     WSACleanup();
     return E_FAIL;
   }
@@ -138,61 +138,61 @@ HRESULT MCPServer::Start(int port) {
   server_addr.sin_addr.s_addr = INADDR_ANY;
   server_addr.sin_port = htons(port);
 
-  if (bind(m_server_socket, (sockaddr*)&server_addr, sizeof(server_addr)) ==
+  if (bind(server_socket_, (sockaddr*)&server_addr, sizeof(server_addr)) ==
       SOCKET_ERROR) {
-    closesocket(m_server_socket);
+    closesocket(server_socket_);
     WSACleanup();
     return E_FAIL;
   }
 
   // Listen
-  if (listen(m_server_socket, SOMAXCONN) == SOCKET_ERROR) {
-    closesocket(m_server_socket);
+  if (listen(server_socket_, SOMAXCONN) == SOCKET_ERROR) {
+    closesocket(server_socket_);
     WSACleanup();
     return E_FAIL;
   }
 
   // Get actual port if 0 was specified
   int addr_len = sizeof(server_addr);
-  if (getsockname(m_server_socket, (sockaddr*)&server_addr, &addr_len) == 0) {
-    m_port = ntohs(server_addr.sin_port);
+  if (getsockname(server_socket_, (sockaddr*)&server_addr, &addr_len) == 0) {
+    port_ = ntohs(server_addr.sin_port);
   } else {
-    m_port = port;
+    port_ = port;
   }
 
   // Start server thread
-  m_running = true;
-  m_server_thread = std::thread(&MCPServer::ServerThread, this);
+  running_ = true;
+  server_thread_ = std::thread(&MCPServer::ServerThread, this);
 
   // Start command processor thread
-  m_command_processor_thread =
+  command_processor_thread_ =
       std::thread(&MCPServer::CommandProcessorThread, this);
 
   return S_OK;
 }
 
 HRESULT MCPServer::Stop() {
-  if (!m_running) {
+  if (!running_) {
     return S_OK;
   }
 
-  m_running = false;
-  m_queue_cv.notify_all();  // Wake up command processor
+  running_ = false;
+  queue_cv_.notify_all();  // Wake up command processor
 
   // Close server socket to unblock accept()
-  if (m_server_socket != INVALID_SOCKET) {
-    closesocket(m_server_socket);
-    m_server_socket = INVALID_SOCKET;
+  if (server_socket_ != INVALID_SOCKET) {
+    closesocket(server_socket_);
+    server_socket_ = INVALID_SOCKET;
   }
 
   // Wait for server thread
-  if (m_server_thread.joinable()) {
-    m_server_thread.join();
+  if (server_thread_.joinable()) {
+    server_thread_.join();
   }
 
   // Wait for command processor thread
-  if (m_command_processor_thread.joinable()) {
-    m_command_processor_thread.join();
+  if (command_processor_thread_.joinable()) {
+    command_processor_thread_.join();
   }
 
   // Process any remaining commands
@@ -200,8 +200,8 @@ HRESULT MCPServer::Stop() {
 
   // Wait for all client threads to finish
   {
-    std::unique_lock<std::mutex> lock(m_clients_mutex);
-    m_clients_cv.wait(lock, [this] { return m_active_clients.empty(); });
+    std::unique_lock<std::mutex> lock(clients_mutex_);
+    clients_cv_.wait(lock, [this] { return active_clients_.empty(); });
   }
 
   WSACleanup();
@@ -209,14 +209,14 @@ HRESULT MCPServer::Stop() {
 }
 
 void MCPServer::ServerThread() {
-  while (m_running) {
+  while (running_) {
     sockaddr_in client_addr = {};
     int client_len = sizeof(client_addr);
 
     SOCKET client_socket =
-        accept(m_server_socket, (sockaddr*)&client_addr, &client_len);
+        accept(server_socket_, (sockaddr*)&client_addr, &client_len);
     if (client_socket == INVALID_SOCKET) {
-      if (m_running) {
+      if (running_) {
         // Real error, not shutdown
         Sleep(100);
       }
@@ -227,17 +227,17 @@ void MCPServer::ServerThread() {
     std::thread client_thread([this, client_socket]() {
       // Register this thread
       {
-        std::lock_guard<std::mutex> lock(m_clients_mutex);
-        m_active_clients.insert(std::this_thread::get_id());
+        std::lock_guard<std::mutex> lock(clients_mutex_);
+        active_clients_.insert(std::this_thread::get_id());
       }
 
       ClientHandler(client_socket);
 
       // Unregister this thread
       {
-        std::lock_guard<std::mutex> lock(m_clients_mutex);
-        m_active_clients.erase(std::this_thread::get_id());
-        m_clients_cv.notify_all();
+        std::lock_guard<std::mutex> lock(clients_mutex_);
+        active_clients_.erase(std::this_thread::get_id());
+        clients_cv_.notify_all();
       }
     });
     client_thread.detach();
@@ -248,7 +248,7 @@ void MCPServer::ClientHandler(SOCKET client_socket) {
   char buffer[4096];
   std::string message_buffer;
 
-  while (m_running) {
+  while (running_) {
     int bytes_received = recv(client_socket, buffer, sizeof(buffer), 0);
     if (bytes_received <= 0) {
       break;
@@ -341,18 +341,18 @@ std::string MCPServer::GenerateOperationId() {
 }
 
 void MCPServer::StoreAsyncResult(const std::string& op_id, const JSON& result) {
-  std::lock_guard<std::mutex> lock(m_operations_mutex);
-  auto it = m_async_operations.find(op_id);
-  if (it != m_async_operations.end()) {
+  std::lock_guard<std::mutex> lock(operations_mutex_);
+  auto it = async_operations_.find(op_id);
+  if (it != async_operations_.end()) {
     it->second.status = "completed";
     it->second.result = result;
   }
 }
 
 JSON MCPServer::GetAsyncStatus(const std::string& op_id) {
-  std::lock_guard<std::mutex> lock(m_operations_mutex);
-  auto it = m_async_operations.find(op_id);
-  if (it != m_async_operations.end()) {
+  std::lock_guard<std::mutex> lock(operations_mutex_);
+  auto it = async_operations_.find(op_id);
+  if (it != async_operations_.end()) {
     JSON status = {{"operation_id", op_id}, {"status", it->second.status}};
 
     if (it->second.status == "completed" || it->second.status == "error") {
@@ -361,7 +361,7 @@ JSON MCPServer::GetAsyncStatus(const std::string& op_id) {
       // Clean up old completed operations
       auto age = std::chrono::steady_clock::now() - it->second.start_time;
       if (age > std::chrono::minutes(5)) {
-        m_async_operations.erase(it);
+        async_operations_.erase(it);
       }
     }
 
@@ -390,8 +390,8 @@ JSON MCPServer::ExecuteCommand(const JSON& params) {
 
   // Store operation so that future requests can poll for its status
   {
-    std::lock_guard<std::mutex> lock(m_operations_mutex);
-    m_async_operations[op_id] = {op_id, "pending", JSON::object(),
+    std::lock_guard<std::mutex> lock(operations_mutex_);
+    async_operations_[op_id] = {op_id, "pending", JSON::object(),
                                  std::chrono::steady_clock::now()};
   }
 
@@ -412,12 +412,12 @@ JSON MCPServer::ExecuteCommand(const JSON& params) {
   };
 
   {
-    std::lock_guard<std::mutex> lock(m_queue_mutex);
-    m_command_queue.push(std::move(cmd));
+    std::lock_guard<std::mutex> lock(queue_mutex_);
+    command_queue_.push(std::move(cmd));
   }
   // Wake up the command processor
   // thread to process the command
-  m_queue_cv.notify_one();
+  queue_cv_.notify_one();
 
   // Don't wait for the result, return immediately
   return JSON{{"operation_id", op_id},
@@ -466,10 +466,10 @@ JSON MCPServer::GetDebuggerState(const JSON& params) {
 }
 
 void MCPServer::ProcessCommandQueue() {
-  std::unique_lock<std::mutex> lock(m_queue_mutex);
-  while (!m_command_queue.empty()) {
-    auto cmd = std::move(m_command_queue.front());
-    m_command_queue.pop();
+  std::unique_lock<std::mutex> lock(queue_mutex_);
+  while (!command_queue_.empty()) {
+    auto cmd = std::move(command_queue_.front());
+    command_queue_.pop();
     lock.unlock();
 
     // Execute on main thread
@@ -482,13 +482,13 @@ void MCPServer::ProcessCommandQueue() {
 }
 
 void MCPServer::CommandProcessorThread() {
-  while (m_running) {
-    std::unique_lock<std::mutex> lock(m_queue_mutex);
-    m_queue_cv.wait_for(lock, std::chrono::milliseconds(100), [this] {
-      return !m_command_queue.empty() || !m_running;
+  while (running_) {
+    std::unique_lock<std::mutex> lock(queue_mutex_);
+    queue_cv_.wait_for(lock, std::chrono::milliseconds(100), [this] {
+      return !command_queue_.empty() || !running_;
     });
 
-    if (!m_running) {
+    if (!running_) {
       break;
     }
 
@@ -503,12 +503,12 @@ JSON MCPServer::ExecuteOnMainThread(std::function<JSON()> operation) {
   auto future = cmd->result.get_future();
 
   {
-    std::lock_guard<std::mutex> lock(m_queue_mutex);
-    m_command_queue.push(std::move(cmd));
+    std::lock_guard<std::mutex> lock(queue_mutex_);
+    command_queue_.push(std::move(cmd));
   }
   // Wake up the command processor
   // thread to process the command
-  m_queue_cv.notify_one();
+  queue_cv_.notify_one();
 
   // Retrieves the result of the asynchronous operation. This method blocks the
   // calling thread until the result is available.
