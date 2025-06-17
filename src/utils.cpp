@@ -567,7 +567,6 @@ std::string ExecuteCommand(const DebugInterfaces* interfaces,
   CommandOutputCapture* capture = new CommandOutputCapture();
   interfaces->client->SetOutputCallbacks(capture);
 
-  // TODO: "x ..." commands are not working correctly
   // Execute the command and capture output
   capture->StartCapture();
   HRESULT hr = interfaces->control->Execute(
@@ -589,8 +588,7 @@ std::string ExecuteCommand(const DebugInterfaces* interfaces,
 
   // Release our capture object
   capture->Release();
-
-  return SUCCEEDED(hr) ? output : "";
+  return output;
 }
 
 std::string ConvertToBreakpointFilePath(const std::string& input_path,
