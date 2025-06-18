@@ -618,8 +618,7 @@ To use this server with applications like Visual Studio Code, use the bridge
 application (see `build_output\mcp_stdio_bridge.exe`).
 
 **Available MCP methods:**
-- `executeCommand` - Execute a debugger command asynchronously
-- `getOperationStatus` - Check async operation status
+- `executeCommand` - Execute a debugger command
 - `getDebuggerState` - Get current debugger state
 
 **Note:** This is an experimental feature.

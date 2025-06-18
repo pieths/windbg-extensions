@@ -17,6 +17,7 @@
 #include <memory>
 #include <mutex>
 #include <queue>
+#include <regex>
 #include <set>
 #include <string>
 #include <thread>
@@ -57,24 +58,12 @@ class MCPServer {
   JSON HandleToolsList(const JSON& params);
   JSON HandleToolsCall(const JSON& params);
 
-  // Async operation management
-  struct AsyncOperation {
-    std::string id;
-    std::string status;  // "pending", "completed", "error"
-    JSON result;
-    std::chrono::steady_clock::time_point start_time;
-  };
-
-  std::string GenerateOperationId();
-  void StoreAsyncResult(const std::string& op_id, const JSON& result);
-  JSON GetAsyncStatus(const std::string& op_id);
-
   // WinDbg command handlers
   JSON ExecuteCommand(const JSON& params);
-  JSON GetOperationStatus(const JSON& params);
   JSON GetDebuggerState(const JSON& params);
 
-  // Process commands on the main thread
+  // Process all WinDbg commands on
+  // the same thread sequentially
   void ProcessCommandQueue();
   void CommandProcessorThread();
 
@@ -87,16 +76,14 @@ class MCPServer {
   int port_;
   std::thread server_thread_;
 
-  // Async operations are used to track long-running tasks.
-  // A client can poll for the status of these operations.
-  std::mutex operations_mutex_;
-  std::map<std::string, AsyncOperation> async_operations_;
-  static std::atomic<int> s_operation_counter;
-
   // Add thread tracking for client socket handlers
   std::mutex clients_mutex_;
   std::set<std::thread::id> active_clients_;
   std::condition_variable clients_cv_;
+
+  // Member variables to track client sockets
+  std::set<SOCKET> client_sockets_;
+  std::mutex client_sockets_mutex_;
 
   // Command queue for thread-safe operations
   struct DebugCommand {
@@ -111,8 +98,6 @@ class MCPServer {
   std::condition_variable queue_cv_;
   std::thread command_processor_thread_;
 };
-
-std::atomic<int> MCPServer::s_operation_counter(0);
 
 HRESULT MCPServer::Start(int port) {
   if (running_) {
@@ -198,6 +183,15 @@ HRESULT MCPServer::Stop() {
   // Process any remaining commands
   ProcessCommandQueue();
 
+  // Force close all client sockets to unblock recv() calls
+  {
+    std::lock_guard<std::mutex> lock(client_sockets_mutex_);
+    for (SOCKET sock : client_sockets_) {
+      shutdown(sock, SD_BOTH);
+      closesocket(sock);
+    }
+  }
+
   // Wait for all client threads to finish
   {
     std::unique_lock<std::mutex> lock(clients_mutex_);
@@ -225,15 +219,23 @@ void MCPServer::ServerThread() {
 
     // Handle client in separate thread, but track it
     std::thread client_thread([this, client_socket]() {
-      // Register this thread
+      // Register this thread and socket
       {
         std::lock_guard<std::mutex> lock(clients_mutex_);
         active_clients_.insert(std::this_thread::get_id());
       }
+      {
+        std::lock_guard<std::mutex> lock(client_sockets_mutex_);
+        client_sockets_.insert(client_socket);
+      }
 
       ClientHandler(client_socket);
 
-      // Unregister this thread
+      // Unregister this thread and socket
+      {
+        std::lock_guard<std::mutex> lock(client_sockets_mutex_);
+        client_sockets_.erase(client_socket);
+      }
       {
         std::lock_guard<std::mutex> lock(clients_mutex_);
         active_clients_.erase(std::this_thread::get_id());
@@ -333,51 +335,272 @@ JSON MCPServer::CreateError(const JSON& id,
   return response;
 }
 
-std::string MCPServer::GenerateOperationId() {
-  int counter = s_operation_counter.fetch_add(1);
-  return "op_" + std::to_string(counter) + "_" +
-         std::to_string(
-             std::chrono::steady_clock::now().time_since_epoch().count());
+JSON MCPServer::HandleInitialize(const JSON& params) {
+  // MCP initialization response
+  return JSON{
+      {"protocolVersion", "0.1.0"},
+      {"capabilities", {{"tools", {{"listChanged", true}}}, {"prompts", {}}}},
+      {"serverInfo", {{"name", "windbg-mcp-server"}, {"version", "1.0.0"}}}};
 }
 
-void MCPServer::StoreAsyncResult(const std::string& op_id, const JSON& result) {
-  std::lock_guard<std::mutex> lock(operations_mutex_);
-  auto it = async_operations_.find(op_id);
-  if (it != async_operations_.end()) {
-    it->second.status = "completed";
-    it->second.result = result;
+JSON MCPServer::HandleToolsList(const JSON& params) {
+  // Return list of available tools in MCP format
+  return JSON{
+      {"tools",
+       JSON::array(
+           {{{"name", "executeCommand"},
+             {"description", "Execute a WinDbg command"},
+             {"inputSchema",
+              {{"type", "object"},
+               {"properties",
+                {{"command",
+                  {{"type", "string"},
+                   {"description", "The WinDbg command to execute"}}}}},
+               {"required", JSON::array({"command"})}}}},
+            {{"name", "getDebuggerState"},
+             {"description", "Get the current debugger state"},
+             {"inputSchema",
+              {
+                  {"type", "object"},
+                  {"properties",
+                   JSON::object()}  // Explicitly create empty JSON object
+              }}}})}};
+}
+
+JSON MCPServer::HandleToolsCall(const JSON& params) {
+  std::string tool_name = params.value("name", "");
+  JSON arguments = params.value("arguments", JSON::object());
+
+  if (tool_name == "executeCommand") {
+    // Map to existing ExecuteCommand but wrap response in MCP format
+    JSON result = ExecuteCommand(arguments);
+
+    if (result.contains("error")) {
+      // Error case
+      return JSON{
+          {"content",
+           JSON::array(
+               {{{"type", "text"},
+                 {"text", "Error: " + result["error"].get<std::string>()}}})},
+          {"isError", true}};
+    } else {
+      // Result is now just a string containing the output
+      return JSON{{"content",
+                   JSON::array({{{"type", "text"}, {"text", result.get<std::string>()}}})}};
+    }
+  } else if (tool_name == "getDebuggerState") {
+    JSON result = GetDebuggerState(arguments);
+
+    std::string state_text;
+    if (result.contains("state")) {
+      state_text = "Debugger state: " + result["state"].get<std::string>();
+    } else if (result.contains("error")) {
+      state_text = "Error: " + result["error"].get<std::string>();
+    }
+
+    return JSON{
+        {"content", JSON::array({{{"type", "text"}, {"text", state_text}}})}};
+  } else {
+    return JSON{
+        {"content", JSON::array({{{"type", "text"},
+                                  {"text", "Unknown tool: " + tool_name}}})},
+        {"isError", true}};
   }
 }
 
-JSON MCPServer::GetAsyncStatus(const std::string& op_id) {
-  std::lock_guard<std::mutex> lock(operations_mutex_);
-  auto it = async_operations_.find(op_id);
-  if (it != async_operations_.end()) {
-    JSON status = {{"operation_id", op_id}, {"status", it->second.status}};
+std::string GetCurrentContext() {
+  std::string context_info;
+  ULONG current_process_id = 0;
+  ULONG current_thread_id = 0;
+  static const ULONG INVALID_PROCESS_OR_THREAD_ID = static_cast<ULONG>(-1);
 
-    if (it->second.status == "completed" || it->second.status == "error") {
-      status["result"] = it->second.result;
+  HRESULT hr = g_debug.system_objects->GetCurrentProcessId(&current_process_id);
+  if (FAILED(hr)) {
+    current_process_id = INVALID_PROCESS_OR_THREAD_ID;
+  }
 
-      // Clean up old completed operations
-      auto age = std::chrono::steady_clock::now() - it->second.start_time;
-      if (age > std::chrono::minutes(5)) {
-        async_operations_.erase(it);
+  hr = g_debug.system_objects->GetCurrentThreadId(&current_thread_id);
+  if (FAILED(hr)) {
+    current_thread_id = INVALID_PROCESS_OR_THREAD_ID;
+  }
+
+  context_info += "Current Execution Context:\n";
+  context_info += "  Process: " + std::to_string(current_process_id) + "\n";
+
+  auto command_line = utils::ExecuteCommand(
+      &g_debug,
+      "dx -r0 @$curprocess.Environment.EnvironmentBlock.ProcessParameters->CommandLine.Buffer");
+  size_t start_pos = command_line.find('"');
+  size_t end_pos = command_line.rfind('"');
+  if (start_pos != std::string::npos && end_pos != std::string::npos &&
+      start_pos < end_pos) {
+    // Extract the command line string
+    command_line = command_line.substr(start_pos + 1, end_pos - start_pos - 1);
+  } else {
+    // If no quotes found, just use the whole line
+    command_line = utils::Trim(command_line);
+  }
+  context_info += "  Process Command Line: " + command_line + "\n";
+
+  context_info += "  Thread: " + std::to_string(current_thread_id) + "\n";
+
+  // Get current source info
+  utils::SourceInfo source_info = utils::GetCurrentSourceInfo(&g_debug);
+  if (source_info.is_valid) {
+    if (!source_info.file_path.empty()) {
+      context_info += "  Source File: " + source_info.full_path + "\n";
+      context_info +=
+          "  Source Line: " + std::to_string(source_info.line) + "\n";
+    }
+
+    // Add source context if available
+    if (!source_info.source_context.empty()) {
+      // Add 4 spaces to the front of all lines in source_context
+      std::string indented_context;
+      std::istringstream stream(source_info.source_context);
+      std::string line;
+      bool first_line = true;
+
+      while (std::getline(stream, line)) {
+        if (!first_line) {
+          indented_context += "\n";
+        }
+        indented_context += "    " + line;
+        first_line = false;
+      }
+
+      context_info += "  Source Context (current line starts with \">\"):\n" +
+                      indented_context + "\n";
+    }
+  }
+
+  auto stack_trace = utils::GetTopOfCallStack(&g_debug);
+  context_info += "  Call Stack (top 5):\n";
+  // Add each stack frame from the vector
+  for (size_t i = 0; i < stack_trace.size(); i++) {
+    context_info += "    [" + std::to_string(i) + "] " + stack_trace[i] + "\n";
+  }
+
+  return context_info;
+}
+
+// Run the specified WinDbg command and return the output.
+// The output will always start with the original prompt+command and end with
+// the new prompt. For example,
+//
+//      5:096> dv key_system
+//          key_system = 0x00000027`bddfca40 "com.widevine.alpha"
+//
+//      5:096>
+//
+// Commands that do not produce output (like "g", "gu", "p", "t") will
+// have the following extra context information added to the output. This
+// extra context is also added when a breakpoint is hit.
+//
+//    5:096> p
+//
+//    Current Execution Context:
+//      Process: 6
+//      Process Command Line: "D:\cs\src\out\release_x64\chrome.exe" --type=u...
+//      Thread: 92
+//      Source File: D:\cs\src\media\mojo\services\media_foundation_service.cc
+//      Source Line: 520
+//      Source Context (current line starts with ">"):
+//          516: }
+//          517:
+//          518: void MediaFoundationService::IsKeySystemSupported(
+//          519:     const std::string& key_system,
+//       >  520:     IsKeySystemSupportedCallback callback) {
+//          521:   DVLOG(1) << __func__ << ": key_system=" << key_system;
+//          522:
+//          523:   SCOPED_UMA_HISTOGRAM_TIMER(
+//          524:       "Media.EME.MediaFoundationService.IsKeySystemSupported");
+//          525:
+//      Call Stack (top 5):
+//        [0] chrome!media::MediaFoundationService::IsKeySystemSupported
+//        [1] chrome!media::mojom::MediaFoundationServiceStubDispatch::Accept...
+//        [2] chrome!media::mojom::MediaFoundationServiceStub<mojo::RawPtrImp...
+//        [3] chrome!mojo::InterfaceEndpointClient::HandleValidatedMessage
+//        [4] chrome!mojo::InterfaceEndpointClient::HandleIncomingMessageThun...
+//
+//    5:096>
+//
+std::string ExecuteWinDbgCommand(const std::string& command) {
+  std::string output;
+  ULONG current_process_id = 0;
+  ULONG current_thread_id = 0;
+  static const ULONG INVALID_PROCESS_OR_THREAD_ID = static_cast<ULONG>(-1);
+
+  HRESULT hr = g_debug.system_objects->GetCurrentProcessId(&current_process_id);
+  if (FAILED(hr)) {
+    current_process_id = INVALID_PROCESS_OR_THREAD_ID;
+  }
+
+  hr = g_debug.system_objects->GetCurrentThreadId(&current_thread_id);
+  if (FAILED(hr)) {
+    current_thread_id = INVALID_PROCESS_OR_THREAD_ID;
+  }
+
+  char prompt[64];
+  sprintf_s(prompt, sizeof(prompt), "%d:%03d> ", current_process_id, current_thread_id);
+  output += prompt + command + "\n";
+
+  auto result = utils::ExecuteCommand(&g_debug, command, true);
+
+  bool is_continuation_command =
+      command == "g" || command == "gu" || command == "p" || command == "t";
+
+  // Remove "ModLoad:" lines from all continuation commands except "g".
+  if (is_continuation_command && command != "g") {
+    std::string filtered_result;
+    std::istringstream stream(result);
+    std::string line;
+
+    static const std::regex modload_regex(R"(^\s*ModLoad:)",
+                                          std::regex::optimize);
+
+    while (std::getline(stream, line)) {
+      if (!std::regex_search(line, modload_regex)) {
+        if (!filtered_result.empty()) {
+          filtered_result += "\n";
+        }
+        filtered_result += line;
       }
     }
 
-    return status;
+    result = filtered_result;
   }
 
-  return {{"operation_id", op_id}, {"status", "not_found"}};
-}
+  output += result;
 
-JSON MCPServer::GetOperationStatus(const JSON& params) {
-  std::string operation_id = params.value("operation_id", "");
-  if (operation_id.empty()) {
-    return JSON{{"error", "No operation_id specified"}};
+  bool should_add_context = is_continuation_command;
+  if (!should_add_context) {
+    // Regex to match patterns like "Breakpoint 9 hit", "Breakpoint 123 hit".
+    std::regex breakpoint_regex(R"(Breakpoint\s+\d+\s+hit)", std::regex::icase);
+    if (std::regex_search(result, breakpoint_regex)) {
+      should_add_context = true;
+    }
   }
 
-  return GetAsyncStatus(operation_id);
+  if (should_add_context) {
+    output += "\n\n" + GetCurrentContext();
+  }
+
+  hr = g_debug.system_objects->GetCurrentProcessId(&current_process_id);
+  if (FAILED(hr)) {
+    current_process_id = INVALID_PROCESS_OR_THREAD_ID;
+  }
+
+  hr = g_debug.system_objects->GetCurrentThreadId(&current_thread_id);
+  if (FAILED(hr)) {
+    current_thread_id = INVALID_PROCESS_OR_THREAD_ID;
+  }
+
+  // Show the new prompt
+  sprintf_s(prompt, sizeof(prompt), "\n%d:%03d> ", current_process_id,
+            current_thread_id);
+  output += prompt;
+  return output;
 }
 
 JSON MCPServer::ExecuteCommand(const JSON& params) {
@@ -386,47 +609,10 @@ JSON MCPServer::ExecuteCommand(const JSON& params) {
     return JSON{{"error", "No command specified"}};
   }
 
-  std::string op_id = GenerateOperationId();
-
-  // Store operation so that future requests can poll for its status
-  {
-    std::lock_guard<std::mutex> lock(operations_mutex_);
-    async_operations_[op_id] = {op_id, "pending", JSON::object(),
-                                 std::chrono::steady_clock::now()};
-  }
-
-  // Queue the operation to run on the command processor thread
-  auto cmd = std::make_unique<DebugCommand>();
-  cmd->operation = [this, op_id, command]() {
-    std::string output = utils::ExecuteCommand(&g_debug, command,
-                                               /*wait_for_break_status=*/true);
-
-    // No manual escaping needed - nlohmann::json handles it
-    JSON result = {
-        {"command", command},
-        {"output", output}  // Newlines will be escaped automatically
-    };
-
-    StoreAsyncResult(op_id, result);
-    return JSON{{"queued", true}};
-  };
-
-  {
-    std::lock_guard<std::mutex> lock(queue_mutex_);
-    command_queue_.push(std::move(cmd));
-  }
-  // Wake up the command processor
-  // thread to process the command
-  queue_cv_.notify_one();
-
-  // Don't wait for the result, return immediately
-  return JSON{{"operation_id", op_id},
-              {"status", "pending"},
-              {"type", "async_operation"},
-              {"metadata",
-               {{"async", true},
-                {"poll_method", "getOperationStatus"},
-                {"poll_interval_ms", 100}}}};
+  return ExecuteOnMainThread([this, command]() {
+    std::string output = ExecuteWinDbgCommand(command);
+    return JSON(output);
+  });
 }
 
 JSON MCPServer::GetDebuggerState(const JSON& params) {
@@ -465,6 +651,24 @@ JSON MCPServer::GetDebuggerState(const JSON& params) {
   });
 }
 
+JSON MCPServer::ExecuteOnMainThread(std::function<JSON()> operation) {
+  auto cmd = std::make_unique<DebugCommand>();
+  cmd->operation = operation;
+  auto future = cmd->result.get_future();
+
+  {
+    std::lock_guard<std::mutex> lock(queue_mutex_);
+    command_queue_.push(std::move(cmd));
+  }
+  // Wake up the command processor
+  // thread to process the command
+  queue_cv_.notify_one();
+
+  // Retrieves the result of the asynchronous operation. This method blocks the
+  // calling thread until the result is available.
+  return future.get();
+}
+
 void MCPServer::ProcessCommandQueue() {
   std::unique_lock<std::mutex> lock(queue_mutex_);
   while (!command_queue_.empty()) {
@@ -497,140 +701,6 @@ void MCPServer::CommandProcessorThread() {
   }
 }
 
-JSON MCPServer::ExecuteOnMainThread(std::function<JSON()> operation) {
-  auto cmd = std::make_unique<DebugCommand>();
-  cmd->operation = operation;
-  auto future = cmd->result.get_future();
-
-  {
-    std::lock_guard<std::mutex> lock(queue_mutex_);
-    command_queue_.push(std::move(cmd));
-  }
-  // Wake up the command processor
-  // thread to process the command
-  queue_cv_.notify_one();
-
-  // Retrieves the result of the asynchronous operation. This method blocks the
-  // calling thread until the result is available.
-  return future.get();
-}
-
-JSON MCPServer::HandleInitialize(const JSON& params) {
-  // MCP initialization response
-  return JSON{
-      {"protocolVersion", "0.1.0"},
-      {"capabilities", {{"tools", {{"listChanged", true}}}, {"prompts", {}}}},
-      {"serverInfo", {{"name", "windbg-mcp-server"}, {"version", "1.0.0"}}}};
-}
-
-JSON MCPServer::HandleToolsList(const JSON& params) {
-  // Return list of available tools in MCP format
-  return JSON{
-      {"tools",
-       JSON::array(
-           {{{"name", "executeCommand"},
-             {"description", "Execute a WinDbg command asynchronously"},
-             {"inputSchema",
-              {{"type", "object"},
-               {"properties",
-                {{"command",
-                  {{"type", "string"},
-                   {"description", "The WinDbg command to execute"}}}}},
-               {"required", JSON::array({"command"})}}}},
-            {{"name", "getOperationStatus"},
-             {"description", "Check the status of an asynchronous operation"},
-             {"inputSchema",
-              {{"type", "object"},
-               {"properties",
-                {{"operation_id",
-                  {{"type", "string"},
-                   {"description", "The operation ID to check"}}}}},
-               {"required", JSON::array({"operation_id"})}}}},
-            {{"name", "getDebuggerState"},
-             {"description", "Get the current debugger state"},
-             {"inputSchema",
-              {
-                  {"type", "object"},
-                  {"properties",
-                   JSON::object()}  // Explicitly create empty JSON object
-              }}}})}};
-}
-
-JSON MCPServer::HandleToolsCall(const JSON& params) {
-  std::string tool_name = params.value("name", "");
-  JSON arguments = params.value("arguments", JSON::object());
-
-  if (tool_name == "executeCommand") {
-    // Map to existing ExecuteCommand but wrap response in MCP format
-    JSON result = ExecuteCommand(arguments);
-
-    // Check if it's an async operation
-    if (result.contains("operation_id")) {
-      // For async operations, return the operation info
-      return JSON{
-          {"content",
-           JSON::array(
-               {{{"type", "text"},
-                 {"text", "Command queued for execution. Operation ID: " +
-                              result["operation_id"].get<std::string>()}}})},
-          {"meta", result}  // Include full operation details in meta
-      };
-    } else if (result.contains("error")) {
-      // Error case
-      return JSON{
-          {"content",
-           JSON::array(
-               {{{"type", "text"},
-                 {"text", "Error: " + result["error"].get<std::string>()}}})},
-          {"isError", true}};
-    } else {
-      // Synchronous result (shouldn't happen with current implementation)
-      return JSON{{"content",
-                   JSON::array({{{"type", "text"}, {"text", result.dump()}}})}};
-    }
-  } else if (tool_name == "getOperationStatus") {
-    JSON result = GetOperationStatus(arguments);
-
-    // Format the response for MCP
-    std::string status_text;
-    if (result.contains("status")) {
-      std::string status = result["status"];
-      if (status == "completed" && result.contains("result")) {
-        status_text = "Operation completed:\n" +
-                      result["result"]["output"].get<std::string>();
-      } else if (status == "pending") {
-        status_text = "Operation is still pending...";
-      } else if (status == "not_found") {
-        status_text = "Operation not found";
-      } else {
-        status_text = "Operation status: " + status;
-      }
-    } else if (result.contains("error")) {
-      status_text = "Error: " + result["error"].get<std::string>();
-    }
-
-    return JSON{
-        {"content", JSON::array({{{"type", "text"}, {"text", status_text}}})}};
-  } else if (tool_name == "getDebuggerState") {
-    JSON result = GetDebuggerState(arguments);
-
-    std::string state_text;
-    if (result.contains("state")) {
-      state_text = "Debugger state: " + result["state"].get<std::string>();
-    } else if (result.contains("error")) {
-      state_text = "Error: " + result["error"].get<std::string>();
-    }
-
-    return JSON{
-        {"content", JSON::array({{{"type", "text"}, {"text", state_text}}})}};
-  } else {
-    return JSON{
-        {"content", JSON::array({{{"type", "text"},
-                                  {"text", "Unknown tool: " + tool_name}}})},
-        {"isError", true}};
-  }
-}
-
 HRESULT CALLBACK StartMCPServerInternal(IDebugClient* client,
                                         const char* args) {
   if (args && args[0] == '?' && args[1] == '\0') {
@@ -642,8 +712,7 @@ HRESULT CALLBACK StartMCPServerInternal(IDebugClient* client,
         "The MCP server allows AI assistants and other tools to interact\n"
         "with WinDbg through a JSON-RPC protocol.\n\n"
         "Available MCP tools:\n"
-        "  executeCommand     - Execute a debugger command asynchronously\n"
-        "  getOperationStatus - Check async operation status\n"
+        "  executeCommand     - Execute a debugger command\n"
         "  getDebuggerState   - Get debugger state\n\n"
         "Examples:\n"
         "  !StartMCPServer        - Start on automatic port\n"

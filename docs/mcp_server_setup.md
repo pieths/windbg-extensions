@@ -14,13 +14,33 @@ The MCP server allows GitHub Copilot to interact directly with WinDbg through a 
 
 ## Setup Instructions
 
+### Disable Any Automatic Break Commands Output
+
+The MCP server returns raw command output to AI agents. Any commands that
+automatically display extra output when the debugger breaks can interfere with
+parsing done by the AI agent.
+
+**Remove or comment out** this line from
+[cmake\GenerateStartupCommands.cmake](cmake\GenerateStartupCommands.cmake)
+and then regenerate the startup commands file.
+
+```
+"!AddBreakCommand !ShowNearbyCommandLists"
+```
+
+This prevents extra output from appearing when the debugger breaks, ensuring
+cleaner responses for the AI agent.
+
 ### 1. Copy Copilot Instructions to Chromium Project
 
 Copy the WinDbg-specific instructions to your Chromium project's instructions directory:
 
 ```
-Copy: docs\windbg_mcp_chromium.instructions.md
-To:   <chromium_project>\.github\instructions\windbg_mcp_chromium.instructions.md
+Copy: docs\windbg_mcp.instructions.md
+To:   <chromium_project>\.github\instructions\windbg_mcp.instructions.md
+
+Copy: docs\chromium_debugging.instructions.md
+To:   <chromium_project>\.github\instructions\chromium_debugging.instructions.md
 ```
 
 These instructions provide Copilot with:
@@ -28,7 +48,11 @@ These instructions provide Copilot with:
 - Chromium-specific debugging guidance
 - Best practices for debugging multi-process Chrome applications
 
-**Note**: This file is actively maintained. Update it as needed based on your debugging workflows and Copilot's performance.
+**Note**: This file is actively maintained. Update it as needed based on your
+*debugging workflows and Copilot's performance.
+
+**Important**: When making Copilot requests/queries make sure that these 2 files
+are included as part of the context.
 
 ### 2. Enable MCP Support in VS Code
 
@@ -52,7 +76,7 @@ Create or update `.vscode/mcp.json` in your Chromium project with the following 
     "servers": {
         "windbg_mcp": {
             "type": "stdio",
-            "command": "D:\\windbg\\extensions\\build_output\\mcp_stdio_bridge.exe",
+            "command": "D:\\windbg\\extensions\\build\\build_output\\mcp_stdio_bridge.exe",
             "args": ["127.0.0.1", "8099"]
         }
     }
@@ -63,7 +87,6 @@ Create or update `.vscode/mcp.json` in your Chromium project with the following 
 Update the path to match your actual extensions directory location.
 Update the port (8099) to match the port which is displayed when the
 MCP server starts inside of WinDbg.
-
 
 ### 4. Start the MCP Server
 
@@ -106,7 +129,8 @@ Example Copilot prompts:
 - Check that the MCP server is running in WinDbg (`!MCPServerStatus`)
 
 **Copilot Not Using WinDbg Commands:**
-- Confirm `windbg_mcp_chromium.instructions.md` is in the correct location
+- Confirm `windbg_mcp.instructions.md` and `chromium_debugging.instructions.md`
+  are in the correct location and are included with the query.
 - Verify MCP settings are enabled in VS Code
 - Restart VS Code after configuration changes (shouldn't be necessary but might help)
 
@@ -117,5 +141,6 @@ Example Copilot prompts:
 ## Additional Resources
 
 - [Complete Commands Reference](commands.md)
-- [MCP Protocol Documentation](windbg_mcp_chromium.instructions.md)
+- [MCP Protocol Documentation](windbg_mcp.instructions.md)
+- [Chromium Specific MCP Context](chromium_debugging.instructions.md)
 - [WinDbg Extensions Development Guide](windbg_extensions_guide.md)
