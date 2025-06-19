@@ -21,7 +21,7 @@ automatically display extra output when the debugger breaks can interfere with
 parsing done by the AI agent.
 
 **Remove or comment out** this line from
-[cmake\GenerateStartupCommands.cmake](cmake\GenerateStartupCommands.cmake)
+[cmake/GenerateStartupCommands.cmake](../cmake/GenerateStartupCommands.cmake)
 and then regenerate the startup commands file.
 
 ```
