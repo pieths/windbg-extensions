@@ -171,6 +171,10 @@ will only be hit in child processes.
 .childdbg 1; sxn ibp; sxn epr; sxe -c "bp chrome!media::CreateMediaFoundationCdm; bp chrome!media::MediaFoundationService::IsKeySystemSupported; gc" ld:chrome.dll; g
 ```
 
+```
+.childdbg 1; sxn ibp; sxn epr; sxe -c "bp `chrome!D:\\\\path\\\\to\\\\file\\\\source_file.cc:42`; gc" ld:chrome.dll; g
+```
+
 After the initial breakpoints are set and the application has been started,
 breakpoints can be set using the normal `bp` command.
 
