@@ -32,7 +32,8 @@ Gets the current debugger state.
 
 **Parameters:** None
 
-**Returns:** One of: "break", "running", "stepping", "no_debuggee", or an error
+**Returns:** The debugger state ("break", "running", "stepping", "no_debuggee")
+followed by the current execution context and prompt, or an error
 
 ## Critical Workflow Requirements
 

@@ -347,24 +347,23 @@ JSON MCPServer::HandleToolsList(const JSON& params) {
   // Return list of available tools in MCP format
   return JSON{
       {"tools",
-       JSON::array(
-           {{{"name", "executeCommand"},
-             {"description", "Execute a WinDbg command"},
-             {"inputSchema",
-              {{"type", "object"},
-               {"properties",
-                {{"command",
-                  {{"type", "string"},
-                   {"description", "The WinDbg command to execute"}}}}},
-               {"required", JSON::array({"command"})}}}},
-            {{"name", "getDebuggerState"},
-             {"description", "Get the current debugger state"},
-             {"inputSchema",
-              {
-                  {"type", "object"},
-                  {"properties",
-                   JSON::object()}  // Explicitly create empty JSON object
-              }}}})}};
+       JSON::array({{{"name", "executeCommand"},
+                     {"description", "Execute a WinDbg command"},
+                     {"inputSchema",
+                      {{"type", "object"},
+                       {"properties",
+                        {{"command",
+                          {{"type", "string"},
+                           {"description", "The WinDbg command to execute"}}}}},
+                       {"required", JSON::array({"command"})}}}},
+                    {{"name", "getDebuggerState"},
+                     {"description", "Get the current debugger state"},
+                     {"inputSchema",
+                      {
+                          {"type", "object"},
+                          {"properties", JSON::object()}  // Explicitly create
+                                                          // empty JSON object
+                      }}}})}};
 }
 
 JSON MCPServer::HandleToolsCall(const JSON& params) {
@@ -385,21 +384,27 @@ JSON MCPServer::HandleToolsCall(const JSON& params) {
           {"isError", true}};
     } else {
       // Result is now just a string containing the output
-      return JSON{{"content",
-                   JSON::array({{{"type", "text"}, {"text", result.get<std::string>()}}})}};
+      return JSON{
+          {"content", JSON::array({{{"type", "text"},
+                                    {"text", result.get<std::string>()}}})}};
     }
   } else if (tool_name == "getDebuggerState") {
     JSON result = GetDebuggerState(arguments);
 
-    std::string state_text;
-    if (result.contains("state")) {
-      state_text = "Debugger state: " + result["state"].get<std::string>();
-    } else if (result.contains("error")) {
-      state_text = "Error: " + result["error"].get<std::string>();
+    if (result.contains("error")) {
+      // Error case
+      return JSON{
+          {"content",
+           JSON::array(
+               {{{"type", "text"},
+                 {"text", "Error: " + result["error"].get<std::string>()}}})},
+          {"isError", true}};
+    } else {
+      // Result is now just a string containing the output
+      return JSON{
+          {"content", JSON::array({{{"type", "text"},
+                                    {"text", result.get<std::string>()}}})}};
     }
-
-    return JSON{
-        {"content", JSON::array({{{"type", "text"}, {"text", state_text}}})}};
   } else {
     return JSON{
         {"content", JSON::array({{{"type", "text"},
@@ -481,7 +486,49 @@ std::string GetCurrentContext() {
     context_info += "    [" + std::to_string(i) + "] " + stack_trace[i] + "\n";
   }
 
+  ULONG num_processes;
+  g_debug.system_objects->GetNumberProcesses(&num_processes);
+
+  if (!stack_trace.empty() &&
+      stack_trace[0].find("ntdll!LdrpDoDebuggerBreak") != std::string::npos &&
+      num_processes == 1) {
+    context_info +=
+        "\n"
+        "Extra Context:\n"
+        "This is a new debugging session and no commands have been executed yet.\n"
+        "If you need to set breakpoints for child processes, use something\n"
+        "similar to the following commands:\n"
+        "\n"
+        "    .childdbg 1; sxn ibp; sxn epr; sxe -c \"bp module_name!namespace_name::class_name::method_name; [...optionally more breakpoints if needed]; gc\" ld:module_name.dll; g\n"
+        "\n"
+        "    .childdbg 1; sxn ibp; sxn epr; sxe -c \"bp `module_name!D:\\\\path\\\\to\\\\file\\\\source_file.cc:42`; gc\" ld:module_name.dll; g\n"
+        "\n"
+        "This will set breakpoints in the child process for the specified module\n"
+        "and start execution of the target. These commands should only be used\n"
+        "for the initial breakpoints in a new debugging session.\n";
+  }
   return context_info;
+}
+
+std::string GetPromptString() {
+  ULONG current_process_id = 0;
+  ULONG current_thread_id = 0;
+  static const ULONG INVALID_PROCESS_OR_THREAD_ID = static_cast<ULONG>(-1);
+
+  HRESULT hr = g_debug.system_objects->GetCurrentProcessId(&current_process_id);
+  if (FAILED(hr)) {
+    current_process_id = INVALID_PROCESS_OR_THREAD_ID;
+  }
+
+  hr = g_debug.system_objects->GetCurrentThreadId(&current_thread_id);
+  if (FAILED(hr)) {
+    current_thread_id = INVALID_PROCESS_OR_THREAD_ID;
+  }
+
+  char prompt[64];
+  sprintf_s(prompt, sizeof(prompt), "%d:%03d> ", current_process_id,
+            current_thread_id);
+  return std::string(prompt);
 }
 
 // Run the specified WinDbg command and return the output.
@@ -527,22 +574,8 @@ std::string GetCurrentContext() {
 //
 std::string ExecuteWinDbgCommand(const std::string& command) {
   std::string output;
-  ULONG current_process_id = 0;
-  ULONG current_thread_id = 0;
-  static const ULONG INVALID_PROCESS_OR_THREAD_ID = static_cast<ULONG>(-1);
 
-  HRESULT hr = g_debug.system_objects->GetCurrentProcessId(&current_process_id);
-  if (FAILED(hr)) {
-    current_process_id = INVALID_PROCESS_OR_THREAD_ID;
-  }
-
-  hr = g_debug.system_objects->GetCurrentThreadId(&current_thread_id);
-  if (FAILED(hr)) {
-    current_thread_id = INVALID_PROCESS_OR_THREAD_ID;
-  }
-
-  char prompt[64];
-  sprintf_s(prompt, sizeof(prompt), "%d:%03d> ", current_process_id, current_thread_id);
+  std::string prompt = GetPromptString();
   output += prompt + command + "\n";
 
   auto result = utils::ExecuteCommand(&g_debug, command, true);
@@ -573,6 +606,10 @@ std::string ExecuteWinDbgCommand(const std::string& command) {
 
   output += result;
 
+  // Only add execution context when there is a possiblity that
+  // the execution context has changed. This can happen for
+  // continuation commands (like "g", "gu", "p", "t") or when
+  // a breakpoint is hit.
   bool should_add_context = is_continuation_command;
   if (!should_add_context) {
     // Regex to match patterns like "Breakpoint 9 hit", "Breakpoint 123 hit".
@@ -586,20 +623,7 @@ std::string ExecuteWinDbgCommand(const std::string& command) {
     output += "\n\n" + GetCurrentContext();
   }
 
-  hr = g_debug.system_objects->GetCurrentProcessId(&current_process_id);
-  if (FAILED(hr)) {
-    current_process_id = INVALID_PROCESS_OR_THREAD_ID;
-  }
-
-  hr = g_debug.system_objects->GetCurrentThreadId(&current_thread_id);
-  if (FAILED(hr)) {
-    current_thread_id = INVALID_PROCESS_OR_THREAD_ID;
-  }
-
-  // Show the new prompt
-  sprintf_s(prompt, sizeof(prompt), "\n%d:%03d> ", current_process_id,
-            current_thread_id);
-  output += prompt;
+  output += "\n" + GetPromptString();
   return output;
 }
 
@@ -647,7 +671,10 @@ JSON MCPServer::GetDebuggerState(const JSON& params) {
         break;
     }
 
-    return JSON{{"state", state}, {"status_code", status}};
+    std::string output = "Debugger State: " + state + "\n\n";
+    output += GetCurrentContext() + "\n";
+    output += GetPromptString();
+    return JSON(output);
   });
 }
 
@@ -688,9 +715,8 @@ void MCPServer::ProcessCommandQueue() {
 void MCPServer::CommandProcessorThread() {
   while (running_) {
     std::unique_lock<std::mutex> lock(queue_mutex_);
-    queue_cv_.wait_for(lock, std::chrono::milliseconds(100), [this] {
-      return !command_queue_.empty() || !running_;
-    });
+    queue_cv_.wait_for(lock, std::chrono::milliseconds(100),
+                       [this] { return !command_queue_.empty() || !running_; });
 
     if (!running_) {
       break;
