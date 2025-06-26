@@ -63,7 +63,11 @@ the project directory before using these instructions with Copilot.
 
 - **Visual Studio 2019/2022** with C++ development tools (command line only version is okay)
 - **Windows SDK** (10.0.26100.0 or compatible)
-- **WinDbg** (Debugging Tools for Windows)
+- **WinDbg Headers/Libraries** [Debugging Tools for Windows](https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/debugger-download-tools)
+    can be found as a downloadable option in the Windows SDK. This can also be added after
+    the Windows SDK is installed by going to
+    `Settings->Apps->Installed Apps->Windows Software Developer Kit->Modify->Change`
+    and then selecting "Debugging Tools for Windows".
 - **PowerShell** (for build scripts)
 
 ## Quick Start
