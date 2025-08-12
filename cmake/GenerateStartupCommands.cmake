@@ -3,6 +3,7 @@
 set(EXTENSIONS
     break_commands
     breakpoints_history
+    browser_process_manager
     command_lists
     command_logger
     js_command_wrappers
@@ -27,6 +28,7 @@ set(POST_LOAD_COMMANDS
     "as #sif !StepIntoFunction"
     "as #gcl !GetCallbackLocation"
     "as #stm !StepThroughMojo"
+    "as #cl  !CommandLine"
 
     "!EnableStepThroughMojo"
     "!AddBreakCommand !ShowNearbyCommandLists"
