@@ -29,6 +29,7 @@ set(POST_LOAD_COMMANDS
     "as #gcl !GetCallbackLocation"
     "as #stm !StepThroughMojo"
     "as #cl  !CommandLine"
+    "as #bpt !BrowserProcessType"
 
     "!EnableStepThroughMojo"
     "!AddBreakCommand !ShowNearbyCommandLists"
