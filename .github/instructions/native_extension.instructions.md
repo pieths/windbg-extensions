@@ -19,3 +19,11 @@ applyTo: "**/*.cpp,**/*.h"
 - When creating a new command that is exported from the extension, ensure that it has help text that is printed out to the command window when the user passes "?" as the first argument to the command.
 - Put the extern methods at the end of the file wrapped in a `extern "C" {}` block.
 
+## The following files should be used as references for writing new extensions (but not for what those extensions do):
+
+[dbgeng.h](dbgeng.h)
+[utils.h](../../src/utils.h)
+[utils.cpp](../../src/utils.cpp)
+[js_command_wrappers.cpp](../../src/js_command_wrappers.cpp)
+[CMakeLists.txt](../../CMakeLists.txt)
+[GenerateStartupCommands.cmake](../../cmake/GenerateStartupCommands.cmake)
