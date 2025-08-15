@@ -8,6 +8,59 @@ param(
     [string]$TestName = ""
 )
 
+# Set up Visual Studio Developer Environment
+function Initialize-VsDevEnvironment {
+    # Common Visual Studio installation paths
+    $vsPaths = @(
+        "${env:ProgramFiles}\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\Launch-VsDevShell.ps1",
+        "${env:ProgramFiles}\Microsoft Visual Studio\2022\Professional\Common7\Tools\Launch-VsDevShell.ps1",
+        "${env:ProgramFiles}\Microsoft Visual Studio\2022\Community\Common7\Tools\Launch-VsDevShell.ps1",
+        "${env:ProgramFiles}\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\Launch-VsDevShell.ps1",
+        "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2019\Enterprise\Common7\Tools\Launch-VsDevShell.ps1",
+        "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2019\Professional\Common7\Tools\Launch-VsDevShell.ps1",
+        "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2019\Community\Common7\Tools\Launch-VsDevShell.ps1",
+        "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2019\BuildTools\Common7\Tools\Launch-VsDevShell.ps1"
+    )
+
+    # Check if we're already in a VS Developer environment
+    if ($env:VSINSTALLDIR) {
+        Write-Host "Already in Visual Studio Developer environment." -ForegroundColor Green
+        return
+    }
+
+    # Find and execute the VS Developer shell script
+    foreach ($path in $vsPaths) {
+        if (Test-Path $path) {
+            Write-Host "Setting up Visual Studio Developer environment..." -ForegroundColor Cyan
+            & $path -Arch amd64 -HostArch amd64
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host "Visual Studio Developer environment initialized." -ForegroundColor Green
+                return
+            }
+        }
+    }
+
+    Write-Host "Warning: Could not find Visual Studio Developer environment." -ForegroundColor Yellow
+    Write-Host "Please ensure Visual Studio 2019/2022 with C++ tools is installed." -ForegroundColor Yellow
+}
+
+# Initialize VS Developer environment
+Initialize-VsDevEnvironment
+
+# Ensure we're in the correct directory (where this script is located)
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+if ($PWD.Path -ne $scriptDir) {
+    Write-Host "Changing to script directory: $scriptDir" -ForegroundColor Cyan
+    Set-Location $scriptDir
+}
+
+# Verify CMakeLists.txt exists
+if (-not (Test-Path "CMakeLists.txt")) {
+    Write-Host "Error: CMakeLists.txt not found in current directory." -ForegroundColor Red
+    Write-Host "Please ensure you're running this script from the WinDbg extensions project root." -ForegroundColor Red
+    exit 1
+}
+
 # Create build directory
 $buildDir = "build"
 if ($Action -eq "clean") {
